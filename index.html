@@ -23,8 +23,8 @@ header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;p
 main{max-width:1100px;margin:0 auto;padding:12px}
 .card{background:var(--card);border-radius:22px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.06);margin-bottom:12px;backdrop-filter:blur(12px)}
 .live{display:flex;align-items:center;gap:14px}
-#bigNote{font-size:44px;font-weight:800;min-width:110px;text-align:center;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.1}
-.lv{flex:1;min-width:0}
+#bigNote{font-size:44px;font-weight:800;width:120px;flex:none;height:64px;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-align:center;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.1}
+.live{min-height:128px}.lv{flex:1;min-width:0}#status,#hz{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:20px;line-height:20px}
 #hz{font-size:13px;color:var(--mut)}
 .meter{height:8px;border-radius:5px;background:var(--line);position:relative;margin:7px 0;overflow:hidden}
 #cent{position:absolute;top:0;bottom:0;width:6px;border-radius:3px;background:var(--accent);left:50%;transition:left .08s}
@@ -36,6 +36,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .btn{border:0;border-radius:999px;padding:12px 20px;font-family:inherit;font-weight:600;font-size:16px;cursor:pointer;background:var(--card);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.07)}
 .btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
 .btn.red{background:#ff3b30;color:#fff}
+.ic{width:18px;height:18px;vertical-align:-4px;margin-right:6px}#quick .spd .ic{margin:0;width:22px;height:22px;color:var(--mut)}
 .btn.sm{padding:8px 14px;font-size:14px}
 .bar2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;margin-top:10px}
 .stp{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:999px;padding:4px 6px;box-shadow:0 2px 10px rgba(0,0,0,.07);font-size:14px;font-weight:600}
@@ -60,6 +61,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
 .row small{color:var(--mut);display:block;font-size:12px}
 .seg{display:flex;background:var(--line);border-radius:10px;padding:2px}
+#quick .spd{display:flex;align-items:center;gap:8px;width:100%;max-width:420px;justify-content:center}#quick .spd input{flex:1;width:auto;height:28px}#quick .spd b{min-width:46px;text-align:right;font-size:14px;color:var(--accent)}
 #quick .seg{flex-wrap:wrap;justify-content:center}
 .seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer}
 .seg button.on{background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,.15);color:var(--accent)}
@@ -105,12 +107,13 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
     <div class="ctrl" id="ctrl"></div>
     <div class="bar2">
       <div class="stp">Battute <button id="mMinus">−</button><span id="mcount">0</span><button id="mPlus">+</button></div>
-      <button class="btn sm" id="bImp">🎵 Importa audio</button><input type="file" id="fileAud" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.amr,.3gp" hidden>
+      <button class="btn sm" id="bImp">Importa audio</button><input type="file" id="fileAud" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac,.webm,.amr,.3gp" hidden>
       <button class="btn sm" id="bPhone"></button>
       <button class="btn sm" id="bMet"></button>
       <button class="btn sm" id="bPlay">▶ Ascolta</button>
-      <button class="btn sm" id="bPrint">⎙ Stampa/PDF</button>
-      <button class="btn sm" id="bClrAll" style="color:#ff3b30">🧹 Svuota tutto</button>
+      <button class="btn sm" id="bPrint">PDF</button>
+      <button class="btn sm" id="bImg">Immagine</button>
+      <button class="btn sm" id="bClrAll" style="color:#ff3b30">Svuota tutto</button>
     </div>
     <div class="bar2" id="quick"></div>
     <div class="meta" id="meta"></div>
@@ -139,6 +142,8 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 
 <script>
 "use strict";
+const IC={met:'<path d="M7.5 21h9L14 3.5h-4z"/><path d="M12 17l4.5-9"/><circle cx="15.2" cy="10.6" r="1.3"/><path d="M5.5 21h13"/>',metoff:'<path d="M7.5 21h9L14 3.5h-4z"/><path d="M5.5 21h13"/><path d="M4 4l16 16"/>',trash:'<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l.9 12.2a1.8 1.8 0 0 0 1.8 1.8h5.6a1.8 1.8 0 0 0 1.8-1.8L17.5 7"/><path d="M10 11v6M14 11v6"/>',photo:'<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 15.5l-4.8-4.6L8 19"/>',doc:'<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9.5 14.5L12 17l2.5-2.5"/>',phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.8"/><path d="M10.5 5h3"/>',note:'<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',slow:'<path d="M4 17a8 8 0 0 1 16 0"/><path d="M12 17L8.2 12.2"/><circle cx="12" cy="17" r="1"/>',fast:'<path d="M4 17a8 8 0 0 1 16 0"/><path d="M12 17l3.8-4.8"/><circle cx="12" cy="17" r="1"/>',play:'<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>',stop:'<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/>'};
+const ico=n=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]}</svg>`;
 const $=q=>document.querySelector(q);
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const STR=[{n:6,m:40},{n:5,m:45},{n:4,m:50},{n:3,m:55},{n:2,m:59},{n:1,m:64}];
@@ -408,20 +413,41 @@ function ksBuf(m){if(ksC[m])return ksC[m];
   const sr=ac.sampleRate,f=mtof(m),len=Math.floor(sr*3),b=ac.createBuffer(1,len,sr),y=b.getChannelData(0);
   const P=sr/f-0.5,N=Math.floor(P),fr=P-N,T60=Math.min(4.5,Math.max(1.2,4.5-(m-40)*0.09)),g=Math.pow(10,-3/(T60*f));
   const ex=new Float32Array(N+2),pp=Math.max(1,Math.floor(N*0.13));let lp=0;
-  for(let i=0;i<ex.length;i++){lp=lp*0.4+(Math.random()*2-1)*0.6;ex[i]=lp}
+  const br=Math.min(0.55,0.25+(m-40)*0.008);for(let i=0;i<ex.length;i++){lp=lp*br+(Math.random()*2-1)*(1-br);ex[i]=lp}
   for(let i=ex.length-1;i>=pp;i--)ex[i]-=ex[i-pp]*0.6;
   let dp=0,mx=0;
-  for(let n=0;n<len;n++){let v=n<ex.length?ex[n]:0;if(n>N){const d=(1-fr)*y[n-N]+fr*y[n-N-1];v+=g*0.5*(d+dp);dp=d}y[n]=v;const a=Math.abs(v);if(a>mx)mx=a}
+  for(let n=0;n<len;n++){let v=n<ex.length?ex[n]:0;if(n>N){const d=(1-fr)*y[n-N]+fr*y[n-N-1];v+=g*(0.62*d+0.38*dp);dp=d}y[n]=v;const a=Math.abs(v);if(a>mx)mx=a}
   const k=0.6/(mx||1);for(let n=0;n<len;n++)y[n]*=k;
   return ksC[m]=b}
+let bus=null;
+function getBus(){if(bus)return bus;const sr=ac.sampleRate,len=Math.floor(sr*1.8),ir=ac.createBuffer(2,len,sr);
+  for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2)*(i<sr*0.01?i/(sr*0.01):1)}
+  const cv=ac.createConvolver();cv.buffer=ir;const wet=ac.createGain();wet.gain.value=0.2;const comp=ac.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=3;comp.attack.value=0.005;comp.release.value=0.2;
+  bus=ac.createGain();bus.connect(comp);bus.connect(cv).connect(wet).connect(comp);comp.connect(ac.destination);return bus}
+const pnC={};
+function pnBuf(m){if(pnC[m])return pnC[m];
+  const sr=ac.sampleRate,f=mtof(m),len=Math.floor(sr*3.2),b=ac.createBuffer(1,len,sr),y=b.getChannelData(0);
+  const B=0.0003*Math.pow(2,(m-60)/18),T=Math.max(0.7,3.4-(m-40)*0.05),H=Math.max(3,Math.min(10,Math.floor(7000/f)));
+  for(const det of [-0.0008,0.0008])for(let h=1;h<=H;h++){const fh=h*f*Math.sqrt(1+B*h*h)*(1+det);if(fh>sr/2.3)break;
+    const a=0.5/Math.pow(h,1.3)*(h===2?1.1:1),tau=T/(1+0.45*(h-1)),w=2*Math.PI*fh/sr,ph=Math.random()*6.283,k=Math.exp(-1/(tau*sr));let env=a;
+    for(let i=0;i<len;i++){y[i]+=env*Math.sin(w*i+ph);env*=k}}
+  let lp=0;const hn=Math.floor(sr*0.015);for(let i=0;i<hn;i++){lp=lp*0.6+(Math.random()*2-1)*0.4;y[i]+=lp*0.35*(1-i/hn)}
+  const at=Math.floor(sr*0.002);for(let i=0;i<at;i++)y[i]*=i/at;
+  let mx=0;for(let i=0;i<len;i++){const a=Math.abs(y[i]);if(a>mx)mx=a}const kk=0.6/(mx||1);for(let i=0;i<len;i++)y[i]*=kk;
+  return pnC[m]=b}
+function piano(m,t,dur,vol){
+  const src=ac.createBufferSource(),g=ac.createGain(),lpf=ac.createBiquadFilter();src.buffer=pnBuf(m);lpf.type='lowpass';lpf.frequency.value=Math.min(12000,2500+mtof(m)*8);
+  const end=t+Math.min(dur+0.25,3.1),v=(vol||.35)*1.9;g.gain.setValueAtTime(v,t);g.gain.setValueAtTime(v,end-0.2);g.gain.exponentialRampToValueAtTime(0.001,end);
+  src.connect(lpf).connect(g).connect(getBus());src.start(t);src.stop(end+0.02);playing.push(src)}
 function gtr(m,t,dur,vol){
   if(!body){const b1=ac.createBiquadFilter();b1.type='peaking';b1.frequency.value=110;b1.Q.value=1.2;b1.gain.value=5;
     const b2=ac.createBiquadFilter();b2.type='peaking';b2.frequency.value=230;b2.Q.value=1.5;b2.gain.value=3;
-    const b3=ac.createBiquadFilter();b3.type='highshelf';b3.frequency.value=3500;b3.gain.value=-6;b1.connect(b2).connect(b3).connect(ac.destination);body=b1}
+    const b3=ac.createBiquadFilter();b3.type='highshelf';b3.frequency.value=4000;b3.gain.value=-4;const b4=ac.createBiquadFilter();b4.type='peaking';b4.frequency.value=420;b4.Q.value=2;b4.gain.value=2;b1.connect(b2).connect(b4).connect(b3).connect(getBus());body=b1}
   const src=ac.createBufferSource(),g=ac.createGain();src.buffer=ksBuf(m);
   const end=t+Math.min(dur+0.15,2.9);g.gain.setValueAtTime((vol||.35)*2.2,t);g.gain.setValueAtTime((vol||.35)*2.2,end-0.08);g.gain.linearRampToValueAtTime(0,end);
   src.connect(g).connect(body);src.start(t);src.stop(end+0.02);playing.push(src)}
 function pluck(m,t,dur,vol){
+  if(S.snd==='pia')return piano(m,t,dur,vol);
   if(S.snd!=='syn')return gtr(m,t,dur,vol);
   const f=mtof(m),g=ac.createGain(),o1=ac.createOscillator(),o2=ac.createOscillator(),g2=ac.createGain();
   o1.type='triangle';o1.frequency.value=f;o2.type='sine';o2.frequency.value=f*2;g2.gain.value=.3;
@@ -433,7 +459,8 @@ function flat(){const L=sc.beats*4,out=[];let p=0;sc.measures.forEach((ms,mi)=>{
 function startPos(){if(!sel)return 0;const L=sc.beats*4;let p=0;for(let i=0;i<sel.mi;i++){const ms=sc.measures[i];p+=ms.length?ms.reduce((a,e)=>a+e.d,0):L}if(sel.ei!=null)for(let i=0;i<sel.ei;i++)p+=sc.measures[sel.mi][i].d;return p}
 function stopAudio(){playing.forEach(o=>{try{o.stop()}catch(e){}});playing=[];clearTimeout(playT)}
 function playFrom(pos){
-  ensureAC();stopAudio();const{out,end}=flat(),u=60/(sc.bpm*S.pspd)/4,t0=ac.currentTime+.08;let last=null;
+  ensureAC();stopAudio();if(S.snd!=='syn'){const need=new Set();flat().out.forEach(x=>{if(x.p>=pos-1)NOTES(x.e).forEach(m=>need.add(m))});need.forEach(m=>S.snd==='pia'?pnBuf(m):ksBuf(m))}
+  const{out,end}=flat(),u=60/(sc.bpm*S.pspd)/4,t0=ac.currentTime+.08;let last=null;
   const st=out.filter(x=>x.p<=pos).pop();if(st)pos=st.p;
   out.forEach(x=>{if(x.p<pos){last=null;return}const e=x.e;if(e.m!==null){const k=JSON.stringify(e.m);if(last&&last.tie&&last.k===k)last.d+=e.d*u;else{last={ns:NOTES(e),k,t:t0+(x.p-pos)*u,d:e.d*u};queue.push(last)}last.tie=!!e.t}else last=null});
   queue.forEach(n=>n.ns.forEach((m,i)=>pluck(m,n.t+i*0.018,n.d,n.ns.length>1?.2:.35)));queue.length=0;
@@ -442,7 +469,7 @@ function playFrom(pos){
 }
 function stopPlay(){stopAudio();const was=PB.hl;PB.on=false;PB.paused=false;PB.hl=null;drawPB();if(was)render()}
 function pausePlay(){if(!PB.on)return;if(!PB.paused){PB.pos=Math.max(0,PB.pos+(ac.currentTime-PB.t0)/PB.u);stopAudio();PB.paused=true;drawPB()}else playFrom(PB.pos)}
-function drawPB(){$('#bPlay').textContent=PB.on?'■ Ferma':'▶ Ascolta'+(sel?' da qui':'');$('#fpP').textContent=PB.on&&!PB.paused?'❚❚':'▶'}
+function drawPB(){$('#bPlay').innerHTML=PB.on?ico('stop')+'Ferma':ico('play')+'Ascolta'+(sel?' da qui':'');$('#fpP').textContent=PB.on&&!PB.paused?'❚❚':'▶'}
 function pbTrack(){const pi=$('#pbInfo');pi.classList.toggle('on',PB.on);if(!PB.on)return;
   const p=PB.paused?PB.pos:PB.pos+(ac.currentTime-PB.t0)/PB.u,f=flat(),L=sc.beats*4;
   let mi=0,acc=0;for(;mi<sc.measures.length-1;mi++){const ms=sc.measures[mi],d=ms.length?ms.reduce((a,e)=>a+e.d,0):L;if(acc+d>p)break;acc+=d}
@@ -578,7 +605,7 @@ function drawEd(){
   const fb=v=>(v/4).toLocaleString('it-IT',{maximumFractionDigits:2});
   $('#einfo').innerHTML='Battuta '+(sel.mi+1)+' · <span style="color:'+(sum>L?'#ff3b30':sum===L?'#34c759':'var(--mut)')+'">'+fb(sum)+' di '+sc.beats+' tempi</span>';
   $('#bBr').classList.toggle('on',(sc.br||[]).includes(sel.mi));
-  $('#eDur').innerHTML=[16,8,4,2,1,0.5,0.25].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}">${DNAME[v]}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
+  $('#eDur').innerHTML=[16,8,4,2,1,0.5,0.25].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}" title="${DNAME[v]}">${nIco(v)}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
   const L7=S.lang==='it'?LETI:LETE;
   $('#eNotes').innerHTML=`<button class="ch ${ed.stk?'on':''}" data-a="stk">＋ Sovrapponi</button>`+L7.map((n,i)=>`<button class="ch nt" data-n="${i}">${n}${ed.sharp?'#':''}</button>`).join('')+
     `<button class="ch ${ed.sharp?'on':''}" data-a="sh">#</button><button class="ch" data-a="o-">Ott −</button><span class="ch" style="background:transparent">${ed.oct}</span><button class="ch" data-a="o+">Ott +</button><button class="ch" data-a="rest">Pausa</button><button class="ch" data-a="del">⌫</button>`;
@@ -645,25 +672,43 @@ async function importAudio(file){
   const ci=S.countIn,ck=S.click;S.countIn=false;S.click=false;
   await startRec(true);
   const src=ac.createBufferSource();src.buffer=ab;src.connect(an);const t0=ac.currentTime;src.start();
-  rec.imp={src,ci,ck,iv:setInterval(()=>status('🎵 Trascrizione audio… '+Math.min(100,Math.round((ac.currentTime-t0)/ab.duration*100))+'%'),300)};
+  rec.imp={src,ci,ck,iv:setInterval(()=>status('Trascrizione audio… '+Math.min(100,Math.round((ac.currentTime-t0)/ab.duration*100))+'%'),300)};
   src.onended=()=>setTimeout(()=>{if(rec.on)stopRec()},400);
 }
 $('#fileAud').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importAudio(f)};
 $('#bImp').onclick=()=>$('#fileAud').click();
-function drawPhone(){$('#bPhone').textContent=S.phone?'📱 Smartphone: 2 per rigo':'📱 Smartphone: no';$('#bPhone').style.color=S.phone?'var(--accent)':''}
+function drawPhone(){$('#bPhone').innerHTML=ico('phone')+(S.phone?'Smartphone: 2 per rigo':'Smartphone: no');$('#bPhone').style.color=S.phone?'var(--accent)':''}
 $('#bPhone').onclick=()=>{S.phone=!S.phone;save();drawPhone();render()};
-function drawMet(){$('#bMet').textContent=S.click&&S.vol>0?'🔔 Metronomo':'🔕 Metronomo'}
+function drawMet(){$('#bMet').innerHTML=S.click&&S.vol>0?ico('met')+'Metronomo':ico('metoff')+'Metronomo'}
 $('#bMet').onclick=()=>{S.click=!S.click;if(S.click&&!S.vol)S.vol=60;save();drawMet()};
+$('#bImg').onclick=async()=>{
+  const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-9999px;top:0;width:720px';document.body.appendChild(tmp);
+  render({host:tmp,W:Math.round(720/S.pz)});const cs=getComputedStyle(document.documentElement),cv=v=>cs.getPropertyValue(v).trim();
+  const svgs=[...tmp.querySelectorAll('svg')],Wd=1440,top=110;let y=top,parts='';
+  svgs.forEach(sv=>{const vb=sv.getAttribute('viewBox').split(' ').map(Number),h=vb[3]*Wd/vb[2];parts+=`<svg x="0" y="${y}" width="${Wd}" height="${h}" viewBox="${vb.join(' ')}">${sv.innerHTML}</svg>`;y+=h});
+  tmp.remove();const H=Math.ceil(y+50);
+  let src=`<svg xmlns="http://www.w3.org/2000/svg" width="${Wd}" height="${H}" color="#111" font-family="-apple-system,Roboto,Helvetica,Arial,sans-serif"><rect width="100%" height="100%" fill="#fff"/><text x="${Wd/2}" y="58" text-anchor="middle" font-size="40" font-weight="700" fill="#111">${esc(sc.name)}</text><text x="${Wd/2}" y="92" text-anchor="middle" font-size="20" fill="#666">${sc.beats}/4 · ♩ = ${sc.bpm}</text>${parts}<text x="${Wd/2}" y="${H-18}" text-anchor="middle" font-size="16" fill="#888">Copyright © Ignazio Paolicelli</text></svg>`;
+  src=src.replace(/var\((--[a-z0-9]+)\)/g,(m,v)=>cv(v)||'#111');
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=Wd;c.height=H;c.getContext('2d').drawImage(img,0,0);
+    c.toBlob(async bl=>{const fn=(sc.name||'spartito').replace(/[^\w\- àèéìòù]/gi,'_')+'.png',f=new File([bl],fn,{type:'image/png'});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:sc.name});return}catch(e){}}
+      const a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);toast('Immagine salvata: '+fn)},'image/png')};
+  img.onerror=()=>toast('Errore nella creazione dell\'immagine');img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(src)};
 $('#bPrint').onclick=()=>{const pa=$('#printArea');pa.innerHTML=`<h1>${esc(sc.name)}</h1><div class="pm">${sc.beats}/4 · ♩ = ${sc.bpm}</div><div id="paS"></div><div class="pf">Copyright © Ignazio Paolicelli</div>`;render({host:$('#paS'),W:Math.round(720/S.pz)});setTimeout(()=>window.print(),80)};
 $('#title').oninput=e=>{sc.name=e.target.value||'Senza titolo';save()};
 /* ---------- SETTINGS ---------- */
 function seg2(key,opts,val){return`<div class="seg">${opts.map(o=>`<button data-k="${key}" data-v="${o[0]}" class="${String(val)===String(o[0])?'on':''}">${o[1]}</button>`).join('')}</div>`}
 const tg=(k,v)=>`<button class="tg ${v?'on':''}" data-t="${k}"></button>`;
 const MODESEG=()=>seg2('mode',[['single','Note singole'],['bi','Bicordi'],['chord','Accordi'],['all','Tutto']],S.mode);
-const GRIDSEG=()=>seg2('grid',[[4,'♩ Semiminima'],[2,'♪ Croma'],[1,'Semicroma'],[0.5,'Biscroma'],[0.25,'Semibiscroma']],S.grid);
+function nIco(v){const fl={2:1,1:2,0.5:3,0.25:4}[v]||0,hol=v>=8;let s=`<ellipse cx="7" cy="19" rx="4" ry="2.9" transform="rotate(-20 7 19)" fill="${hol?'none':'currentColor'}" stroke="currentColor" stroke-width="1.5"/>`;
+  if(v<16)s+=`<path d="M10.6 18.3V3" stroke="currentColor" stroke-width="1.5"/>`;for(let i=0;i<fl;i++)s+=`<path d="M10.6 ${3+i*3.2}c.4 2.6 4.2 3.6 3.6 7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`;
+  return `<svg viewBox="0 0 18 24" width="15" height="20" style="vertical-align:middle">${s}</svg>`}
+const GRIDSEG=()=>seg2('grid',[[4,nIco(4)],[2,nIco(2)],[1,nIco(1)],[0.5,nIco(0.5)],[0.25,nIco(0.25)]],S.grid);
 function setKV(k,v){if(rec.on&&k!=='snd'&&k!=='pspd'&&k!=='pz'){toast('Termina prima la registrazione');return false}
   if(k==='beats'){sc.beats=+v;fixAll();save()}else S[k]=(k==='grid'||k==='pspd'||k==='pz')?+v:v;return true}
-function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','🎸 Chitarra'],['syn','Semplice']],S.snd)}${seg2('pspd',[[0.5,'50%'],[0.75,'75%'],[1,'100%'],[1.25,'125%'],[1.5,'150%']],S.pspd)}`}
+function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','Chitarra'],['pia','Pianoforte'],['syn','Semplice']],S.snd)}<div class="spd">${ico('slow')}<input type="range" id="pspd" min="25" max="200" step="5" value="${Math.round(S.pspd*100)}">${ico('fast')}<b id="pspdV">${Math.round(S.pspd*100)}%</b></div>`}
+$('#quick').oninput=ev=>{if(ev.target.id!=='pspd')return;S.pspd=+ev.target.value/100;$('#pspdV').textContent=ev.target.value+'%';save();
+  clearTimeout(window._sp);window._sp=setTimeout(()=>{if(PB.on&&!PB.paused){pausePlay();playFrom(PB.pos)}},250)};
 $('#quick').onclick=ev=>{const b=ev.target.closest('button');if(!b||!b.dataset.k)return;const k=b.dataset.k;if(setKV(k,b.dataset.v)){if(k==='snd'||k==='pspd'){save();drawQuick();if(k==='snd'){ensureAC();pluck(48,ac.currentTime+.02,1,.3);pluck(52,ac.currentTime+.04,1,.3);pluck(55,ac.currentTime+.06,1,.3)}}else apply()}};
 function drawSet(){
   const fo=(a,b,v)=>{let s='';for(let i=a;i<=b;i++)s+=`<option ${i===v?'selected':''}>${i}</option>`;return s};
@@ -717,7 +762,8 @@ function load(){fixAll();$('#title').value=sc.name;sel=null;drawQuick();$('#edit
 $('#bLib').onclick=()=>{drawLib();$('#shLib').classList.add('open')};
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s)s.classList.remove('open')});
 /* ---------- INIT ---------- */
-document.documentElement.dataset.theme=S.theme;calcAllowed();drawMet();drawPhone();drawQuick();load();
+document.documentElement.dataset.theme=S.theme;[['bImp','note'],['bPrint','doc'],['bImg','photo'],['bClrAll','trash']].forEach(([i,n])=>$('#'+i).insertAdjacentHTML('afterbegin',ico(n)));
+calcAllowed();drawMet();drawPhone();drawQuick();load();
 setInterval(()=>{if(rec.on&&!rec.paused&&!rec.counting)render()},100);
 function kick(){if(!rec.k){rec.k=1;requestAnimationFrame(()=>{rec.k=0;render()})}}
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,150)});
