@@ -30,7 +30,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .meter::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--mut);opacity:.5}
 #lvl{height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .06s}
 #status{font-size:14px;font-weight:600}
-.dots{display:flex;gap:6px;margin-top:6px}.dots i{width:10px;height:10px;border-radius:50%;background:var(--line);transition:.08s}.dots i.on{background:var(--accent);transform:scale(1.3)}
+.dots{margin-top:2px;height:56px;opacity:.45;transition:opacity .3s}.dots.go{opacity:1}.dots svg{display:block}
 .ctrl{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
 .btn{border:0;border-radius:999px;padding:12px 20px;font-family:inherit;font-weight:600;font-size:16px;cursor:pointer;background:var(--card);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.07)}
 .btn.pri{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
@@ -40,7 +40,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .stp{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:999px;padding:4px 6px;box-shadow:0 2px 10px rgba(0,0,0,.07);font-size:14px;font-weight:600}
 .stp button{width:30px;height:30px;border-radius:50%;border:0;background:var(--line);color:var(--ink);font-size:18px;cursor:pointer}
 .meta{font-size:12px;color:var(--mut);text-align:center;margin-top:8px}
-#score{color:var(--ink);overflow:hidden}
+#score{color:var(--ink);overflow-x:auto}
 #score svg{display:block;user-select:none}
 .mh{cursor:pointer}
 #editor{position:fixed;left:0;right:0;bottom:0;z-index:8;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:22px 22px 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.12);padding:12px 12px calc(env(safe-area-inset-bottom) + 12px);transform:translateY(110%);transition:transform .25s}
@@ -112,8 +112,8 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 
 <div id="editor">
   <div class="er"><span id="einfo"></span>
-    <button class="ch" data-a="insB">＋ Prima</button><button class="ch" data-a="insA">＋ Dopo</button>
-    <button class="ch" data-a="clr">Svuota</button><button class="ch" data-a="delM" style="color:#ff3b30">Elimina battuta</button>
+    <button class="ch" data-a="clr">Svuota</button><button class="ch" data-a="recHere" style="background:#ff3b30;color:#fff">● Registra qui</button><button class="ch" data-a="insB">＋ Prima</button><button class="ch" data-a="insA">＋ Dopo</button>
+    <button class="ch" data-a="br" id="bBr">↵ A capo dopo</button><button class="ch" data-a="delM" style="color:#ff3b30">Elimina battuta</button>
     <button class="ch" data-a="close">✕</button></div>
   <div class="er" id="eDur"></div>
   <div class="er" id="eNotes"></div>
@@ -187,7 +187,7 @@ function analyze(){
   metro(now);
 }
 /* ---------- RECORDING ---------- */
-let rec={on:false,paused:false,counting:false,acc:0,t0:0,cs:0,ev:[],cur:null,pend:null,valley:1,lastClick:0,beat:-1};
+let rec={at:null,on:false,paused:false,counting:false,acc:0,t0:0,cs:0,ev:[],cur:null,pend:null,valley:1,lastClick:0,beat:-1};
 const clock=()=>rec.acc+((!rec.on||rec.paused||rec.counting)?0:performance.now()-rec.t0);
 function seg(obs,r){
   if(obs==='U')return;const t=clock(),c=rec.cur,om=obs==='R'?null:obs;
@@ -212,11 +212,12 @@ function toMeasures(ev){
   return ms;
 }
 const takeMs=()=>toMeasures(rec.cur?rec.ev.concat([{m:rec.cur.m,s:rec.cur.s,e:clock()}]):rec.ev);
+const merged=tk=>{if(rec.at==null)return trimEmpty(sc.measures).concat(tk);const a=sc.measures.slice();a.splice(rec.at,Math.min(tk.length,a.length-rec.at),...tk);return a};
 const trimEmpty=a=>{a=a.slice();while(a.length&&!a[a.length-1].length)a.pop();return a};
 async function startRec(){
-  if(!await initMic())return;stopPlay();sel=null;closeEd();
-  Object.assign(rec,{on:true,paused:false,acc:0,ev:[],cur:{m:null,s:0},pend:null,beat:-1});
-  if(S.countIn){rec.counting=true;rec.cs=performance.now()+150}else{rec.counting=false;rec.t0=performance.now();status('● Registrazione…')}
+  if(!await initMic())return;stopPlay();const at=sel?sel.mi:null;sel=null;closeEd();
+  Object.assign(rec,{at,on:true,paused:false,acc:0,ev:[],cur:{m:null,s:0},pend:null,beat:-1});
+  if(S.countIn){rec.counting=true;rec.cs=performance.now()+150}else{rec.counting=false;rec.t0=performance.now();status(recMsg())}
   drawCtrl();
 }
 function pauseRec(){
@@ -228,32 +229,44 @@ function pauseRec(){
 function stopRec(){
   if(!rec.counting){if(!rec.paused)rec.acc+=performance.now()-rec.t0;rec.paused=true;rec.ev.push({m:rec.cur.m,s:rec.cur.s,e:rec.acc})}
   const ms=rec.counting?[]:toMeasures(rec.ev);rec.on=false;rec.counting=false;
-  if(ms.length){sc.measures=trimEmpty(sc.measures).concat(ms);save();toast('Aggiunte '+ms.length+' battute')}else toast('Nessuna nota rilevata');
+  if(ms.length){sc.measures=merged(ms);save();toast(rec.at==null?'Aggiunte '+ms.length+' battute':'Battute sovrascritte dalla '+(rec.at+1))}else toast('Nessuna nota rilevata');
   status('Premi Registra e suona');drawCtrl();render();
 }
 function metro(now){
   const bm=60000/sc.bpm;
   if(rec.on&&rec.counting){if(now<rec.cs)return;const k=Math.floor((now-rec.cs)/bm);
-    if(k>=sc.beats){rec.counting=false;rec.t0=rec.cs+sc.beats*bm;rec.acc=0;rec.beat=-1;status('● Registrazione…')}
+    if(k>=sc.beats){rec.counting=false;rec.t0=rec.cs+sc.beats*bm;rec.acc=0;rec.beat=-1;status(recMsg())}
     else if(k!==rec.beat){rec.beat=k;tick(k===0,k,S.vol>0);status('Conteggio… '+(k+1))}return}
   if(rec.on&&!rec.paused){const k=Math.floor(clock()/bm);if(k!==rec.beat){rec.beat=k;tick(k%sc.beats===0,k%sc.beats,S.click&&S.vol>0)}}
 }
 function tick(acc,k,sound){
-  [...$('#dots').children].forEach((d,i)=>d.classList.toggle('on',i===k));
   if(!sound)return;rec.lastClick=performance.now();
   const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=acc?2200:1600;
   const vv=S.vol/100;g.gain.setValueAtTime((acc?.3:.2)*vv+.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.035);
   o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.04);
 }
+const recMsg=()=>rec.at==null?'● Registrazione…':'● Registrazione sulla battuta '+(rec.at+1)+'…';
 const status=t=>$('#status').textContent=t;
 function drawCtrl(){
   const c=$('#ctrl');
-  if(!rec.on)c.innerHTML='<button class="btn pri" id="bRec">● Registra</button>';
+  if(!rec.on)c.innerHTML='<button class="btn pri" id="bRec">● Registra'+(sel?' sulla battuta '+(sel.mi+1):'')+'</button>';
   else c.innerHTML='<button class="btn" id="bPause">'+(rec.paused?'▶ Riprendi':'❚❚ Pausa')+'</button><button class="btn red" id="bStop">■ Fine</button>';
   const b=$('#bRec');if(b)b.onclick=startRec;
   if($('#bPause')){$('#bPause').onclick=pauseRec;$('#bStop').onclick=stopRec}
-  $('#dots').innerHTML='<i></i>'.repeat(sc.beats);
+  let h='';for(let i=0;i<sc.beats;i++){const x=14+i*34;h+=`<g id="bn${i}" fill="currentColor"><ellipse cx="${x}" cy="48" rx="5.6" ry="4" transform="rotate(-20 ${x} 48)"/><rect x="${x+4.2}" y="26" width="1.6" height="22"/></g>`}
+  $('#dots').innerHTML=`<svg width="${sc.beats*34+6}" height="56" style="color:var(--mut)">${h}<circle id="ball" cx="19" cy="20" r="5" fill="var(--accent)"/></svg>`;
 }
+function bounce(){
+  requestAnimationFrame(bounce);const b=document.getElementById('ball');if(!b)return;
+  const now=performance.now(),bm=60000/sc.bpm,n=sc.beats;let t=-1;
+  if(rec.on&&rec.counting&&now>=rec.cs)t=now-rec.cs;else if(rec.on&&!rec.counting)t=clock();
+  $('#dots').classList.toggle('go',t>=0);
+  let k=0,f=0;if(t>=0){const bt=t/bm;k=Math.floor(bt)%n;f=bt%1}
+  const x0=19+k*34,x1=19+((k+1)%n)*34,x=x0+(x1-x0)*f,y=20-14*4*f*(1-f);
+  b.setAttribute('cx',x.toFixed(1));b.setAttribute('cy',y.toFixed(1));
+  for(let i=0;i<n;i++){const g=document.getElementById('bn'+i);if(g)g.setAttribute('fill',t>=0&&i===k&&f<.35?'var(--accent)':'currentColor')}
+}
+requestAnimationFrame(bounce);
 /* ---------- PLAYBACK ---------- */
 let playing=[],playT=null;
 function pluck(m,t,dur,vol){
@@ -319,7 +332,7 @@ function clefFit(){ // chiave centrata: ricciolo sul 2° rigo (SOL)
 }
 function render(){
   const host=$('#score'),W=Math.max(300,host.clientWidth),L=sc.beats*4;
-  const meas=rec.on?trimEmpty(sc.measures).concat(takeMs()):sc.measures;
+  const meas=rec.on?merged(takeMs()):sc.measures;
   $('#mcount').textContent=meas.length;
   $('#meta').textContent=sc.beats+'/4 · ♩ = '+sc.bpm+' · tasti '+S.fMin+'–'+S.fMax+' · '+lib.length+' spartiti salvati';
   if(!meas.length){host.innerHTML='<p style="text-align:center;color:var(--mut);padding:30px 0">Spartito vuoto: registra o aggiungi battute con +</p>';return}
@@ -334,15 +347,16 @@ function render(){
     return{it,mi,w:16+it.reduce((a,p)=>a+p.w,0),over:sum>L};
   });
   const PRE=46,TS=24,rows=[];let row=null;
-  lays.forEach((ly,i)=>{if(!row||row.w+ly.w>W-4){row={ms:[],pre:i===0?PRE+TS:PRE};row.w=row.pre;rows.push(row)}row.ms.push(ly);row.w+=ly.w});
+  const BR=new Set(sc.br||[]);
+  lays.forEach((ly,i)=>{if(!row||row.ms.length>=4||BR.has(i-1)){row={ms:[],pre:i===0?PRE+TS:PRE};row.w=row.pre;rows.push(row)}row.ms.push(ly);row.w+=ly.w});
   const notes=[],strs=[],ends=[];
   rows.forEach((row,ri)=>{
-    const tot=row.ms.reduce((a,l)=>a+l.w,0);let k=(W-4-row.pre)/tot;if(ri===rows.length-1)k=Math.min(k,1.25);
+    const tot=row.ms.reduce((a,l)=>a+l.w,0);let k=(W-4-row.pre)/tot;if(ri===rows.length-1&&row.ms.length<4&&!BR.has(row.ms[row.ms.length-1].mi))k=Math.min(k,1.25);k=Math.max(k,0.6);
     let s='',x=row.pre;
     row.ms.forEach(ly=>{
-      const mw=ly.w*k,mi=ly.mi,isM=sel&&sel.mi===mi;
+      const mw=ly.w*k,mi=ly.mi,isM=(sel&&sel.mi===mi)||(rec.on&&rec.at===mi);
       s+=`<rect class="mh" data-mi="${mi}" x="${x+1}" y="6" width="${mw-2}" height="${H-8}" rx="12" fill="${isM?'var(--accent)':(ly.over?'#ff3b30':'transparent')}" fill-opacity="${isM||ly.over?.12:0}"/>`;
-      s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}</text>`;
+      s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}${BR.has(mi)?' ↵':''}</text>`;
       let cx=x+8*k;
       ly.it.forEach(p=>{const pk=p.w*k,nx=cx+pk/2+(p.acc?4:0);cx+=pk;
         const isS=isM&&sel.ei===p.ei&&p.ei!==undefined,col=isS?'var(--accent)':'currentColor';
@@ -363,7 +377,7 @@ function render(){
   notes.forEach((n,i)=>{if(n.rest||!n.tie)return;const nx=notes[i+1],dy=n.up?8:-8,cy=n.up?7:-7;
     const x2=(nx&&!nx.rest&&nx.ri===n.ri)?nx.x-5:Math.min(n.x+26,ends[n.ri]);
     strs[n.ri]+=`<path d="M${n.x+5} ${n.y+dy} Q${(n.x+5+x2)/2} ${n.y+dy+cy} ${x2} ${n.y+dy}" fill="none" stroke="currentColor" stroke-width="1.4"/>`});
-  host.innerHTML=strs.map(s=>`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${s}</svg>`).join('');
+  host.innerHTML=strs.map((s,i)=>`<svg width="${Math.max(W,ends[i]+4)}" height="${H}">${s}</svg>`).join('');
   if(rec.on)host.lastElementChild.scrollIntoView({block:'nearest'});
 }
 /* ---------- EDITOR ---------- */
@@ -373,13 +387,15 @@ function select(mi,ei){
   sel={mi,ei};const e=ei!=null?sc.measures[mi][ei]:null;
   if(e){const d=e.d;if([12,6,3].includes(d)){ed.v=d/1.5;ed.dot=true}else if(DUR.includes(d)){ed.v=d;ed.dot=false}
     if(e.m!==null){ed.oct=Math.floor(e.m/12)-1;ed.sharp=!!SH[e.m%12];ensureAC();pluck(e.m,ac.currentTime+.01,.4,.3)}}
-  drawEd();$('#editor').classList.add('open');render();
+  drawEd();$('#editor').classList.add('open');drawCtrl();render();
 }
-function closeEd(){sel=null;$('#editor').classList.remove('open');render()}
+function shiftBr(from,d){sc.br=(sc.br||[]).map(i=>i>=from?i+d:i)}
+function closeEd(){sel=null;$('#editor').classList.remove('open');drawCtrl();render()}
 function drawEd(){
   if(!sel)return;const ms=sc.measures[sel.mi],sum=ms.reduce((a,e)=>a+e.d,0),L=sc.beats*4;
   const fb=v=>(v/4).toLocaleString('it-IT',{maximumFractionDigits:2});
   $('#einfo').innerHTML='Battuta '+(sel.mi+1)+' · <span style="color:'+(sum>L?'#ff3b30':sum===L?'#34c759':'var(--mut)')+'">'+fb(sum)+' di '+sc.beats+' tempi</span>';
+  $('#bBr').classList.toggle('on',(sc.br||[]).includes(sel.mi));
   $('#eDur').innerHTML=[16,8,4,2,1].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}">${DNAME[v]}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
   const L7=S.lang==='it'?LETI:LETE;
   $('#eNotes').innerHTML=L7.map((n,i)=>`<button class="ch nt" data-n="${i}">${n}${ed.sharp?'#':''}</button>`).join('')+
@@ -396,11 +412,13 @@ $('#editor').onclick=ev=>{
   else if(a==='o+')ed.oct=Math.min(6,ed.oct+1);
   else if(a==='rest'){if(e){e.m=null;delete e.t}else ms.push({m:null,d:edD()})}
   else if(a==='del'){if(e){ms.splice(sel.ei,1);sel.ei=null}else ms.pop()}
-  else if(a==='insB'){sc.measures.splice(sel.mi,0,[]);sel.ei=null}
-  else if(a==='insA'){sc.measures.splice(sel.mi+1,0,[]);sel={mi:sel.mi+1,ei:null}}
-  else if(a==='clr'){ms.length=0;sel.ei=null}
-  else if(a==='delM'){sc.measures.splice(sel.mi,1);save();if(!sc.measures.length)return closeEd();sel={mi:Math.min(sel.mi,sc.measures.length-1),ei:null}}
+  else if(a==='br'){const b=sc.br=sc.br||[],j=b.indexOf(sel.mi);if(j<0)b.push(sel.mi);else b.splice(j,1)}
+  else if(a==='insB'){shiftBr(sel.mi,1);sc.measures.splice(sel.mi,0,[]);sel.ei=null}
+  else if(a==='insA'){shiftBr(sel.mi+1,1);sc.measures.splice(sel.mi+1,0,[]);sel={mi:sel.mi+1,ei:null}}
+  else if(a==='clr'){ms.length=0;sel.ei=null;toast('Battuta '+(sel.mi+1)+' svuotata: premi Registra qui')}
+  else if(a==='delM'){sc.br=(sc.br||[]).filter(i=>i!==sel.mi);shiftBr(sel.mi+1,-1);sc.measures.splice(sel.mi,1);save();if(!sc.measures.length)return closeEd();sel={mi:Math.min(sel.mi,sc.measures.length-1),ei:null}}
   else if(a==='close')return closeEd();
+  else if(a==='recHere')return startRec();
   save();drawEd();render();
 };
 $('#score').onclick=ev=>{if(rec.on)return;const g=ev.target.closest('[data-ei]'),r=ev.target.closest('[data-mi]');
