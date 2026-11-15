@@ -137,8 +137,8 @@ const IT=['DO','DO#','RE','RE#','MI','FA','FA#','SOL','SOL#','LA','LA#','SI'];
 const EN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const LETI=['DO','RE','MI','FA','SOL','LA','SI'],LETE=['C','D','E','F','G','A','B'];
 const LET=[0,0,1,1,2,3,3,4,4,5,5,6],SH=[0,1,0,1,0,0,1,0,1,0,1,0],SEM=[0,2,4,5,7,9,11];
-const DUR=[16,12,8,6,4,3,2,1];
-const DNAME={16:'Semibreve',8:'Minima',4:'Semiminima',2:'Croma',1:'Semicroma'};
+const DUR=[16,12,8,6,4,3,2,1.5,1,0.5];
+const DNAME={16:'Semibreve',8:'Minima',4:'Semiminima',2:'Croma',1:'Semicroma',0.5:'Biscroma'};
 const NOTES=e=>e.m==null?[]:Array.isArray(e.m)?e.m:[e.m];
 const ICH=['DO','DO#','RE','MIb','MI','FA','FA#','SOL','LAb','LA','SIb','SI'],ECH=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 const TYPES={maj:[[0,4,7],''],min:[[0,3,7],'m'],'7':[[0,4,7,10],'7'],maj7:[[0,4,7,11],'maj7'],m7:[[0,3,7,10],'m7'],sus4:[[0,5,7],'sus4'],sus2:[[0,2,7],'sus2'],dim:[[0,3,6],'dim']};
@@ -173,7 +173,7 @@ function pos(m){let b=null;for(const s of STR){const f=m-s.m;if(f>=S.fMin&&f<=S.
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2200)}
 
 /* ---------- AUDIO ---------- */
-let fbuf=null,lin=null,frameN=0;
+let YCL=1,fbuf=null,lin=null,frameN=0;
 let ac=null,an=null,buf=null,dB=new Float32Array(2400),loop=null,G=0.005;
 function ensureAC(){if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}
 async function initMic(){
@@ -189,9 +189,10 @@ function yin(fmin,fmax){
   d[0]=1;let sum=0;
   for(let t=1;t<=tMax;t++){let s=0;for(let i=0;i<W;i++){const x=buf[off+i]-buf[off+i+t];s+=x*x}sum+=s;d[t]=sum>0?s*t/sum:1}
   let tau=-1;
-  for(let t=tMin;t<tMax;t++){if(d[t]<0.13){while(t+1<tMax&&d[t+1]<d[t])t++;tau=t;break}}
-  if(tau<0){let mn=1,mt=-1;for(let t=tMin;t<tMax;t++)if(d[t]<mn){mn=d[t];mt=t}if(mn<0.28)tau=mt;else return -1}
-  const a=d[tau-1],b=d[tau],c=d[tau+1],den=a-2*b+c;return sr/(tau+(den?0.5*(a-c)/den:0));
+  for(let t=tMin;t<tMax;t++){if(d[t]<0.12){while(t+1<tMax&&d[t+1]<d[t])t++;tau=t;break}}
+  if(tau<0){let mn=1,mt=-1;for(let t=tMin;t<tMax;t++)if(d[t]<mn){mn=d[t];mt=t}return -1}
+  {const t2=Math.round(tau/2);if(t2>=tMin){let bt=t2;for(let t=t2-2;t<=t2+2;t++)if(d[t]<d[bt])bt=t;if(d[bt]<0.2)tau=bt}} // evita l'ottava sotto
+  YCL=d[tau];const a=d[tau-1],b=d[tau],c=d[tau+1],den=a-2*b+c;return sr/(tau+(den?0.5*(a-c)/den:0));
 }
 function analyze(){
   an.getFloatTimeDomainData(buf);
@@ -217,24 +218,30 @@ function analyze(){
 }
 /* ---------- POLIFONIA ---------- */
 function grabSpec(){an.getFloatFrequencyData(fbuf);for(let k=0;k<lin.length;k++)lin[k]=Math.pow(10,fbuf[k]/20)}
-function multiPitch(M){
+function multiPitch(M,T,R){
   const df=ac.sampleRate/an.fftSize,cands=[...ALLOWED].sort((a,b)=>a-b),out=[];
   const k0=Math.floor(70/df),k1=Math.floor(2500/df),tmp=Array.from(M.subarray(k0,k1)).sort((a,b)=>a-b),fl=tmp[tmp.length>>1]*2+1e-9;
   const win=f=>[Math.max(1,Math.floor(f*0.982/df)),Math.min(M.length-2,Math.ceil(f*1.018/df))];
   const harm=m=>{const f=mtof(m),A=[];for(let h=1;h<=10&&f*h<5000;h++){const[lo,hi]=win(f*h);let mx=0;for(let k=lo;k<=hi;k++)if(M[k]>mx&&M[k]>=M[k-1]&&M[k]>=M[k+1])mx=M[k];A.push(Math.max(0,mx-fl))}return A};
+  const k5=Math.min(M.length-1,Math.floor(5000/df)),en=()=>{let e=0;for(let k=k0;k<k5;k++)e+=Math.max(0,M[k]-fl);return e},E0=en();
+  const M0=T||M.slice(),tonal=m=>{const f=mtof(m);let sc=0,n=0;for(let h=1;h<=4&&f*h<5000;h++){const k=Math.round(f*h/df);if(k<14||k>=M0.length-15)continue;
+    let pk=0;for(let j=k-1;j<=k+1;j++)pk=Math.max(pk,M0[j]);const nb=[];for(let j=k-14;j<=k+14;j++)if(Math.abs(j-k)>4)nb.push(M0[j]);nb.sort((a,b)=>a-b);sc+=Math.min(pk/(nb[nb.length>>1]+1e-12),50);n++}return n?sc/n:0};
   const used=new Set();let first=0;
   for(let it=0;it<6;it++){
     let best=-1,bs=0,bA=null;
     for(const m of cands){if(used.has(m))continue;const A=harm(m),f=mtof(m);let s=0,mx=0;
-      A.forEach((a,h)=>{s+=a*(f+27)/((h+1)*f+320);if(a>mx)mx=a});
-      if(A[0]<0.1*mx)s*=0.35;
+      A.forEach((a,h)=>{s+=a/Math.pow(h+1,0.6);if(a>mx)mx=a});
+      if((A[0]||0)+(A[2]||0)<0.15*mx)s*=0.3; // senza armoniche dispari = sottoarmonica falsa
       if(s>bs){bs=s;best=m;bA=A}}
     if(best<0)break;
+    for(let g=0;g<2&&ALLOWED.has(best-12)&&!used.has(best-12);g++){const As=harm(best-12),od=(As[0]||0)+(As[2]||0)+(As[4]||0),ev=(As[1]||0)+(As[3]||0)+(As[5]||0);if(od>0&&((As[0]||0)>0.3*ev||(As[2]||0)>0.3*ev)){best-=12;bA=As}else break} // errore d'ottava
     if(it===0)first=bs;else if(bs<first*0.2)break;
-    out.push({m:best,s:bs});used.add(best);
+    const rise=()=>{if(!R)return true;const k=Math.round(mtof(best)/df);let a=0,b=0;for(let j=k-1;j<=k+1;j++){a=Math.max(a,M0[j]);b=Math.max(b,R[j])}return a>=b*1.5};
+    used.add(best);if(tonal(best)>=12&&rise())out.push({m:best,s:bs}); // scarta i rumori (non intonati)
     const f=mtof(best);
     bA.forEach((a,h)=>{const sm=h===0?a:Math.min(a,(bA[h-1]+a+(bA[h+1]||0))/3);const[lo,hi]=win(f*(h+1));for(let k=lo-1;k<=hi+1;k++)M[k]=Math.max(0,M[k]-sm)});
   }
+  out.expl=E0>0?1-en()/E0:0;
   return out;
 }
 function matchChord(out){
@@ -248,12 +255,14 @@ function matchChord(out){
     if(!best||sc>best.sc)best={r,ty,sc,outW}}
   return best&&best.sc>=0.5&&best.outW<0.3?best:null;
 }
-function analyzePoly(M){
-  let out=multiPitch(M);if(!out.length)return{m:null};
+function analyzePoly(M,T,R){
+  let out=multiPitch(M,T,R);if(!out.length||out.expl<0.35)return{m:null}; // rumore (dita che strisciano)
+  {const q=out.map(o=>o.m).sort((a,b)=>a-b);let adj=0;for(let i=1;i<q.length;i++)if(q[i]-q[i-1]<=2)adj++;if(adj>=2)return{m:null}}
   const ms=[...new Set(out.map(o=>o.m))].sort((a,b)=>a-b),pcs=new Set(ms.map(m=>m%12));
   if(S.mode!=='bi'&&pcs.size>=3&&(S.mode==='chord'||ms.length>=4||pcs.size<ms.length||ms[ms.length-1]-ms[0]>=12)){const c=matchChord(out);if(c){const fr=voicing(c.r,c.ty);return{m:vNotes(fr),c:[c.r,c.ty],f:fStr(fr)}}}
+  out=out.filter(o=>!out.some(l=>[12,19,24,28,31].includes(o.m-l.m)&&o.s<l.s*0.6)); // armoniche, non note vere
   const top=out.slice().sort((a,b)=>b.s-a.s).slice(0,S.mode==='bi'?3:4).map(o=>o.m).sort((a,b)=>a-b);
-  return{m:top.length===1?top[0]:top};
+  return{m:top.length===1?top[0]:top,out};
 }
 function showLive(res){const b=$('#bigNote');let t='—',h='';
   if(res.c){t=chName(res.c);h='Accordo · '+res.f}
@@ -262,20 +271,24 @@ function showLive(res){const b=$('#bigNote');let t='—',h='';
   b.textContent=t;b.style.fontSize=t.length>8?'22px':t.length>4?'30px':'';$('#hz').textContent=h}
 function newPend(s){return{m:-1,s,pend:true,ref:rec.ring&&rec.ring.length?rec.ring[0]:null,accE:new Float32Array(lin.length),accM:new Float32Array(lin.length),nE:0,nM:0}}
 function anAcc(c,A0,n){const A=new Float32Array(A0.length);for(let k=0;k<A.length;k++)A[k]=A0[k]/n;
-  let r={m:null};
-  if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D)} // solo le note NUOVE (arpeggi)
-  if(r.m==null){r=analyzePoly(A);if(Array.isArray(r.m)&&c.ref)r={m:r.m[0]}}
+  let r;
+  if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D,A,c.ref)} // solo le note NUOVE (arpeggi)
+  else r=analyzePoly(A);
+  if(r.c)return r; // accordo
+  if(c.yv&&c.ny){let bm=null,bc=0;for(const k in c.yv)if(c.yv[k]>bc){bc=c.yv[k];bm=+k}if(bc>=0.6*c.ny&&bc>=2)return{m:bm}} // suono monofonico: una sola nota
+  if(c.ref&&Array.isArray(r.m)){const o=r.out.filter(x=>x.s>=r.out[0].s*0.5).map(x=>x.m).sort((a,b)=>a-b);r={m:o.length===1?o[0]:o}}
   return r}
+function revive(c){const l=rec.ev[rec.ev.length-1];if(rec.cur===c&&l&&l.m!==null&&l.e===c.s){rec.ev.pop();rec.cur={m:l.m,s:l.s,c:l.c,f:l.f};return true}c.m=null;c.dead=true;return false}
 function finalize(c){const n=c.nM||c.nE,A=c.nM?c.accM:c.accE;c.pend=false;
-  if(!n){c.m=null;c.dead=true}else{
+  if(!n){revive(c)}else{
     const r=anAcc(c,A,n);
-    c.m=r.m;c.c=r.c;c.f=r.f;if(c.m==null)c.dead=true;else showLive(r)}
+    c.m=r.m;c.c=r.c;c.f=r.f;if(c.m==null)revive(c);else showLive(r)}
   c.accE=c.accM=c.ref=null}
-function closeEv(e){const c=rec.cur;if(c.pend)finalize(c);if(e>c.s)rec.ev.push({m:c.m,s:c.s,e,c:c.c,f:c.f})}
+function closeEv(e){if(rec.cur.pend)finalize(rec.cur);const c=rec.cur;if(e>c.s)rec.ev.push({m:c.m,s:c.s,e,c:c.c,f:c.f})}
 function segPoly(r,hp){
-  const t=clock(),c=rec.cur,snd=c.m!==null;
+  const t=clock();let c=rec.cur,snd=c.m!==null;
   grabSpec();rec.ring=rec.ring||[];rec.ring.push(lin.slice());if(rec.ring.length>3)rec.ring.shift();
-  if(c.pend){const dt=t-c.s;if(dt>=60){const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if(dt>=130&&!c.prov&&c.nE){c.prov=anAcc(c,c.accE,c.nE);if(c.prov.m!=null)showLive(c.prov)}if(dt>=330)finalize(c)}
+  if(c.pend){const dt=t-c.s;if(dt>=60){const yf=yin(mtof(AMIN)*0.85,mtof(AMAX)*1.25);c.ny=(c.ny||0)+1;if(yf>0&&YCL<0.08){const n=Math.round(69+12*Math.log2(yf/S.a4));if(ALLOWED.has(n)){c.yv=c.yv||{};c.yv[n]=(c.yv[n]||0)+1}}const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if(dt>=130&&!c.prov&&c.nE){c.prov=anAcc(c,c.accE,c.nE);if(c.prov.m!=null)showLive(c.prov)}if(dt>=330){finalize(c);c=rec.cur;snd=c.m!==null}}
   if(r<(snd?G*0.3:G)){rec.sil++;if(rec.sil>=4&&snd){const s=Math.max(c.s,t-75);closeEv(s);rec.cur={m:null,s}}return}
   rec.sil=0;
   if((c.m===null&&!c.dead)||(t-c.s>110&&((r>rec.valley*2.2&&r>G*2)||(hp>rec.hv*1.9&&r>G)))){const s=Math.max(c.s,t-10);closeEv(s);rec.cur=newPend(s);rec.valley=r;rec.hv=hp;return}
@@ -293,10 +306,11 @@ function seg(obs,r){
     rec.pend=null;return}
   if(om===c.m){rec.pend=null;return}
   if(rec.pend&&rec.pend.m===om)rec.pend.n++;else rec.pend={m:om,n:1,s:Math.max(0,t-12)};
-  if(rec.pend.n>=(om===null?4:2)){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};rec.valley=r;rec.pend=null}
+  if(rec.pend.n>=(om===null?4:4)){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};rec.valley=r;rec.pend=null}
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
+  ev=ev.filter((e,i)=>!(e.m!==null&&!e.live&&e.e-e.s<80&&i>0));
   const q=x=>Math.round(x/u/g)*g;let seq=[];
   ev.forEach((e,i)=>{const p=q(e.s),n=i<ev.length-1?q(ev[i+1].s):q(e.e);if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
@@ -403,7 +417,7 @@ function play(){
 const queue=[];
 /* ---------- RENDER ---------- */
 let sel=null;
-const decomp=(d,rest)=>{const r=[];while(d>0){const v=(rest?[16,8,4,2,1]:DUR).find(x=>x<=d);r.push(v);d-=v}return r};
+const decomp=(d,rest)=>{const r=[];while(d>0){const v=(rest?[16,8,4,2,1,0.5]:DUR).find(x=>x<=d);r.push(v);d-=v}return r};
 const pw=v=>22+Math.sqrt(v)*8;
 const TOP=56,BOT=96,yS=s=>BOT-s*5,H=178;
 const ln=(x1,y1,x2,y2,w)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="${w||1}"/>`;
@@ -413,7 +427,8 @@ function drawRest(v,x,col,op){
   else if(v===8)s+=`<rect x="${x-7}" y="${TOP+15}" width="14" height="5" fill="${col}"${o}/>`;
   else if(v===4||v===6)s+=Q;
   else{s+=`<circle cx="${x-3}" cy="${TOP+14}" r="2.6" fill="${col}"/><path d="M${x-3} ${TOP+15} Q${x+1} ${TOP+17} ${x+4} ${TOP+12} L${x-1} ${TOP+31}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
-    if(v===1)s+=`<circle cx="${x-5}" cy="${TOP+22}" r="2.6" fill="${col}"/><path d="M${x-5} ${TOP+23} Q${x-1} ${TOP+25} ${x+2} ${TOP+20}" fill="none" stroke="${col}" stroke-width="1.6"/>`}
+    if(v===1||v===0.5)s+=`<circle cx="${x-5}" cy="${TOP+22}" r="2.6" fill="${col}"/><path d="M${x-5} ${TOP+23} Q${x-1} ${TOP+25} ${x+2} ${TOP+20}" fill="none" stroke="${col}" stroke-width="1.6"/>`}
+  if(v===0.5)s+=`<circle cx="${x-7}" cy="${TOP+30}" r="2.6" fill="${col}"/><path d="M${x-7} ${TOP+31} Q${x-3} ${TOP+33} ${x} ${TOP+28}" fill="none" stroke="${col}" stroke-width="1.6"/>`;
   if(v===12||v===6||v===3)s+=`<circle cx="${x+11}" cy="${TOP+15}" r="1.8" fill="${col}"/>`;
   return s;
 }
@@ -429,10 +444,10 @@ function drawNote(p,x,col){
   const hol=p.v>=8;
   st.forEach((v,i)=>{const hx=x+off[i],y=yS(v);
     s+=`<ellipse cx="${hx}" cy="${y}" rx="${p.v>=16?7:6.2}" ry="4.5" transform="rotate(${p.v>=16?0:-20} ${hx} ${y})" fill="${hol?'none':col}" stroke="${col}" stroke-width="${hol?1.9:1}"/>`;
-    if(p.v===12||p.v===6||p.v===3)s+=`<circle cx="${x+rgt+11}" cy="${v%2===0?y-2.5:y}" r="1.8" fill="${col}"/>`});
-  if(p.v<16){const sx=up?x+5.6:x-5.6,y0=up?yS(lo):yS(hi),ey=up?yS(hi)-34:yS(lo)+34;
+    if(p.v===12||p.v===6||p.v===3||p.v===1.5)s+=`<circle cx="${x+rgt+11}" cy="${v%2===0?y-2.5:y}" r="1.8" fill="${col}"/>`});
+  if(p.v<16){const sx=up?x+5.6:x-5.6,y0=up?yS(lo):yS(hi),ey=up?yS(hi)-(p.v===0.5?40:34):yS(lo)+(p.v===0.5?40:34);
     s+=`<line x1="${sx}" y1="${y0}" x2="${sx}" y2="${ey}" stroke="${col}" stroke-width="1.4"/>`;
-    const fl=(p.v===2||p.v===3)?1:(p.v===1?2:0);
+    const fl=(p.v===2||p.v===3)?1:(p.v===1||p.v===1.5)?2:p.v===0.5?3:0;
     for(let f=0;f<fl;f++){const fy=ey+(up?f*7:-f*7);s+=`<path d="M${sx} ${fy} q1 ${up?7:-7} 8 ${up?11:-11} q3 ${up?4:-4} 1 ${up?10:-10}" fill="none" stroke="${col}" stroke-width="1.8"/>`}}
   if(p.first){
     if(p.c){s+=`<text x="${x}" y="13" text-anchor="middle" font-size="12.5" font-weight="800" fill="var(--accent)">${chName(p.c)}</text>`;
@@ -511,10 +526,10 @@ function render(){
 }
 /* ---------- EDITOR ---------- */
 let ed={v:4,dot:false,sharp:false,oct:3,stk:false,cr:0,ct:'maj'};
-const edD=()=>ed.dot&&ed.v>1?ed.v*1.5:ed.v;
+const edD=()=>ed.dot&&ed.v>0.5?ed.v*1.5:ed.v;
 function select(mi,ei){
   sel={mi,ei};const e=ei!=null?sc.measures[mi][ei]:null;
-  if(e){const d=e.d;if([12,6,3].includes(d)){ed.v=d/1.5;ed.dot=true}else if(DUR.includes(d)){ed.v=d;ed.dot=false}
+  if(e){const d=e.d;if([12,6,3,1.5].includes(d)){ed.v=d/1.5;ed.dot=true}else if(DUR.includes(d)){ed.v=d;ed.dot=false}
     const ns=NOTES(e);if(ns.length){const lo=Math.min(...ns);ed.oct=Math.floor(lo/12)-1;ed.sharp=!!SH[lo%12];ensureAC();ns.forEach((m,i)=>pluck(m,ac.currentTime+.01+i*.018,.5,.25))}}
   drawEd();$('#editor').classList.add('open');drawCtrl();render();
 }
@@ -525,7 +540,7 @@ function drawEd(){
   const fb=v=>(v/4).toLocaleString('it-IT',{maximumFractionDigits:2});
   $('#einfo').innerHTML='Battuta '+(sel.mi+1)+' · <span style="color:'+(sum>L?'#ff3b30':sum===L?'#34c759':'var(--mut)')+'">'+fb(sum)+' di '+sc.beats+' tempi</span>';
   $('#bBr').classList.toggle('on',(sc.br||[]).includes(sel.mi));
-  $('#eDur').innerHTML=[16,8,4,2,1].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}">${DNAME[v]}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
+  $('#eDur').innerHTML=[16,8,4,2,1,0.5].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}">${DNAME[v]}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
   const L7=S.lang==='it'?LETI:LETE;
   $('#eNotes').innerHTML=`<button class="ch ${ed.stk?'on':''}" data-a="stk">＋ Sovrapponi</button>`+L7.map((n,i)=>`<button class="ch nt" data-n="${i}">${n}${ed.sharp?'#':''}</button>`).join('')+
     `<button class="ch ${ed.sharp?'on':''}" data-a="sh">#</button><button class="ch" data-a="o-">Ott −</button><span class="ch" style="background:transparent">${ed.oct}</span><button class="ch" data-a="o+">Ott +</button><button class="ch" data-a="rest">Pausa</button><button class="ch" data-a="del">⌫</button>`;
@@ -535,9 +550,9 @@ $('#editor').onchange=ev=>{if(ev.target.id==='cRoot')ed.cr=+ev.target.value;if(e
 $('#editor').onclick=ev=>{
   const b=ev.target.closest('button');if(!b||!sel)return;
   const ms=sc.measures[sel.mi],e=sel.ei!=null?ms[sel.ei]:null,a=b.dataset.a;
-  if(b.dataset.d){ed.v=+b.dataset.d;if(ed.v===1)ed.dot=false;if(e)e.d=edD()}
+  if(b.dataset.d){ed.v=+b.dataset.d;if(ed.v===0.5)ed.dot=false;if(e)e.d=edD()}
   else if(b.dataset.n){const m=(ed.oct+1)*12+SEM[+b.dataset.n]+(ed.sharp?1:0);if(e){if(ed.stk&&e.m!==null){const a=NOTES(e).slice(),j=a.indexOf(m);if(j>=0)a.splice(j,1);else a.push(m);a.sort((x,y)=>x-y);e.m=a.length?(a.length===1?a[0]:a):null}else e.m=m;delete e.c;delete e.f}else{ms.push({m,d:edD()});if(ed.stk)sel.ei=ms.length-1}ensureAC();pluck(m,ac.currentTime+.01,.4,.3)}
-  else if(a==='dot'){ed.dot=!ed.dot&&ed.v>1;if(e)e.d=edD()}
+  else if(a==='dot'){ed.dot=!ed.dot&&ed.v>0.5;if(e)e.d=edD()}
   else if(a==='sh')ed.sharp=!ed.sharp;
   else if(a==='o-')ed.oct=Math.max(1,ed.oct-1);
   else if(a==='o+')ed.oct=Math.min(6,ed.oct+1);
@@ -571,7 +586,7 @@ $('#title').oninput=e=>{sc.name=e.target.value||'Senza titolo';save()};
 function seg2(key,opts,val){return`<div class="seg">${opts.map(o=>`<button data-k="${key}" data-v="${o[0]}" class="${String(val)===String(o[0])?'on':''}">${o[1]}</button>`).join('')}</div>`}
 const tg=(k,v)=>`<button class="tg ${v?'on':''}" data-t="${k}"></button>`;
 const MODESEG=()=>seg2('mode',[['single','Note singole'],['bi','Bicordi'],['chord','Accordi'],['all','Tutto']],S.mode);
-const GRIDSEG=()=>seg2('grid',[[4,'♩ Semiminima'],[2,'♪ Croma'],[1,'Semicroma']],S.grid);
+const GRIDSEG=()=>seg2('grid',[[4,'♩ Semiminima'],[2,'♪ Croma'],[1,'Semicroma'],[0.5,'Biscroma']],S.grid);
 function setKV(k,v){if(rec.on&&k!=='snd'&&k!=='pspd'){toast('Termina prima la registrazione');return false}
   if(k==='beats')sc.beats=+v;else S[k]=(k==='grid'||k==='pspd')?+v:v;return true}
 function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','🎸 Chitarra'],['syn','Semplice']],S.snd)}${seg2('pspd',[[0.5,'50%'],[0.75,'75%'],[1,'100%'],[1.25,'125%'],[1.5,'150%']],S.pspd)}`}
