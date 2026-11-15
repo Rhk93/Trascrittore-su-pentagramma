@@ -99,6 +99,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
     <div class="ctrl" id="ctrl"></div>
     <div class="bar2">
       <div class="stp">Battute <button id="mMinus">−</button><span id="mcount">0</span><button id="mPlus">+</button></div>
+      <button class="btn sm" id="bMet"></button>
       <button class="btn sm" id="bPlay">▶ Ascolta</button>
       <button class="btn sm" id="bPrint">⎙ Stampa/PDF</button>
     </div>
@@ -135,8 +136,9 @@ const DUR=[16,12,8,6,4,3,2,1];
 const DNAME={16:'Semibreve',8:'Minima',4:'Semiminima',2:'Croma',1:'Semicroma'};
 const THEMES={arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
 
-let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,countIn:true,tab:true,theme:'arcobaleno'},LS.get('sdv_set',{}));
-const newScore=()=>({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'Nuovo spartito',bpm:80,beats:4,measures:[[],[],[],[]]});
+let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,countIn:true,tab:true,theme:'arcobaleno'},LS.get('sdv_set',{}));
+if(!S.v2){S.grid=2;S.v2=1}
+const newScore=()=>({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'Nuovo spartito',bpm:60,beats:4,measures:[[],[],[],[]]});
 let lib=LS.get('sdv_lib',[]);if(!lib.length)lib.push(newScore());
 let sc=lib.find(x=>x.id===LS.get('sdv_cur',null))||lib[0];
 const save=()=>{LS.set('sdv_lib',lib);LS.set('sdv_cur',sc.id);LS.set('sdv_set',S)};
@@ -175,7 +177,7 @@ function analyze(){
   $('#lvl').style.width=Math.min(100,r/G*12)+'%';
   let obs='U';
   if(now-rec.lastClick<70){}
-  else if(r<G){obs='R';if(!rec.on||rec.paused){$('#bigNote').textContent='—'}}
+  else if(r<((rec.on&&rec.cur&&rec.cur.m!==null)?G*0.3:G)){obs='R';if(!rec.on||rec.paused){$('#bigNote').textContent='—'}}
   else{const f=yin(mtof(AMIN)*0.85,mtof(AMAX)*1.25);
     if(f>0){const mf=69+12*Math.log2(f/S.a4),n=Math.round(mf);
       if(ALLOWED.has(n)&&Math.abs(mf-n)<0.42){obs=n;const p=pos(n);$('#bigNote').textContent=nm(n,1);
@@ -191,7 +193,7 @@ function seg(obs,r){
   if(obs==='U')return;const t=clock(),c=rec.cur,om=obs==='R'?null:obs;
   if(om!==null&&om===c.m){
     if(t-c.s<80)rec.valley=r;
-    else{if(t-c.s>140&&r>rec.valley*2.4&&r>G*3){rec.ev.push({m:c.m,s:c.s,e:t-10});rec.cur={m:om,s:t-10};rec.valley=r;rec.pend=null;return}
+    else{if(t-c.s>180&&r>rec.valley*3.2&&r>G*4){rec.ev.push({m:c.m,s:c.s,e:t-10});rec.cur={m:om,s:t-10};rec.valley=r;rec.pend=null;return}
       rec.valley=Math.min(rec.valley,r)}
     rec.pend=null;return}
   if(om===c.m){rec.pend=null;return}
@@ -233,14 +235,14 @@ function metro(now){
   const bm=60000/sc.bpm;
   if(rec.on&&rec.counting){if(now<rec.cs)return;const k=Math.floor((now-rec.cs)/bm);
     if(k>=sc.beats){rec.counting=false;rec.t0=rec.cs+sc.beats*bm;rec.acc=0;rec.beat=-1;status('● Registrazione…')}
-    else if(k!==rec.beat){rec.beat=k;tick(k===0,k,true);status('Conteggio… '+(k+1))}return}
-  if(rec.on&&!rec.paused){const k=Math.floor(clock()/bm);if(k!==rec.beat){rec.beat=k;tick(k%sc.beats===0,k%sc.beats,S.click)}}
+    else if(k!==rec.beat){rec.beat=k;tick(k===0,k,S.vol>0);status('Conteggio… '+(k+1))}return}
+  if(rec.on&&!rec.paused){const k=Math.floor(clock()/bm);if(k!==rec.beat){rec.beat=k;tick(k%sc.beats===0,k%sc.beats,S.click&&S.vol>0)}}
 }
 function tick(acc,k,sound){
   [...$('#dots').children].forEach((d,i)=>d.classList.toggle('on',i===k));
   if(!sound)return;rec.lastClick=performance.now();
   const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=acc?2200:1600;
-  g.gain.setValueAtTime(acc?.22:.14,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.035);
+  const vv=S.vol/100;g.gain.setValueAtTime((acc?.3:.2)*vv+.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.035);
   o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.04);
 }
 const status=t=>$('#status').textContent=t;
@@ -273,7 +275,7 @@ function play(){
 const queue=[];
 /* ---------- RENDER ---------- */
 let sel=null;
-const decomp=d=>{const r=[];while(d>0){const v=DUR.find(x=>x<=d);r.push(v);d-=v}return r};
+const decomp=(d,rest)=>{const r=[];while(d>0){const v=(rest?[16,8,4,2,1]:DUR).find(x=>x<=d);r.push(v);d-=v}return r};
 const pw=v=>22+Math.sqrt(v)*8;
 const TOP=56,BOT=96,yS=s=>BOT-s*5,H=178;
 const ln=(x1,y1,x2,y2,w)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="${w||1}"/>`;
@@ -304,6 +306,17 @@ function drawNote(p,x,col){
     if(S.tab){const q=pos(p.m);if(q)s+=`<text x="${x}" y="167" text-anchor="middle" font-size="9.5" fill="var(--mut)">${q.s}ª·${q.f}</text>`}}
   return s;
 }
+const CF="'Noto Music','Bravura','Segoe UI Symbol','Apple Symbols',serif";let CLEF=null;
+function clefFit(){ // chiave centrata: ricciolo sul 2° rigo (SOL)
+  if(CLEF)return CLEF;
+  const ns='http://www.w3.org/2000/svg',sv=document.createElementNS(ns,'svg'),t=document.createElementNS(ns,'text');
+  sv.setAttribute('style','position:absolute;left:-999px;top:0');sv.setAttribute('width','300');sv.setAttribute('height','300');
+  t.setAttribute('x','0');t.setAttribute('y','150');t.setAttribute('font-size','100');t.setAttribute('font-family',CF);t.textContent='𝄞';
+  sv.appendChild(t);document.body.appendChild(sv);const b=t.getBBox();sv.remove();
+  if(!b.height)return{x:6,y:BOT+11,fs:62};
+  const Hc=72,k=Hc/b.height,fs=100*k,gY=TOP+40; // un rigo più in basso
+  CLEF={fs:+fs.toFixed(1),x:+(10-b.x*k).toFixed(1),y:+(gY-0.68*Hc-(b.y-150)*k).toFixed(1)};return CLEF;
+}
 function render(){
   const host=$('#score'),W=Math.max(300,host.clientWidth),L=sc.beats*4;
   const meas=rec.on?trimEmpty(sc.measures).concat(takeMs()):sc.measures;
@@ -313,7 +326,7 @@ function render(){
   const lays=meas.map((ms,mi)=>{
     const it=[];
     if(!ms.length)it.push({rest:true,v:16,empty:true,w:60});
-    else ms.forEach((e,ei)=>{const ps=decomp(e.d);ps.forEach((v,pi)=>it.push({m:e.m,rest:e.m===null,v,ei,first:pi===0,tie:e.m!==null&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
+    else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null);ps.forEach((v,pi)=>it.push({m:e.m,rest:e.m===null,v,ei,first:pi===0,tie:e.m!==null&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
     const acc={};
     it.forEach(p=>{if(p.rest)return;const wm=p.m+12,dk=diat(wm),sh=SH[wm%12];p.st=dk-30;
       if(sh&&acc[dk]!=='#'){p.acc='♯';acc[dk]='#'}else if(!sh&&acc[dk]==='#'){p.acc='♮';acc[dk]='n'}if(p.acc)p.w+=9});
@@ -343,7 +356,7 @@ function render(){
       s+=last?ln(x-6,TOP,x-6,BOT,1.2)+`<rect x="${x-4}" y="${TOP}" width="4" height="40" fill="currentColor"/>`:ln(x,TOP,x,BOT,1.2);
     });
     let st='';for(let i=0;i<5;i++)st+=ln(4,TOP+i*10,x,TOP+i*10,1);
-    st+=`<text x="6" y="${BOT+11}" font-size="62" font-family="'Noto Music','Bravura','Segoe UI Symbol','Apple Symbols',serif" fill="currentColor">𝄞</text>`;
+    const C=clefFit();st+=`<text x="${C.x}" y="${C.y}" font-size="${C.fs}" font-family="${CF}" fill="currentColor">𝄞</text>`;
     if(ri===0)st+=`<text x="${PRE+10}" y="${TOP+17}" text-anchor="middle" font-size="21" font-weight="800" font-family="Georgia,serif" fill="currentColor">${sc.beats}</text><text x="${PRE+10}" y="${TOP+37}" text-anchor="middle" font-size="21" font-weight="800" font-family="Georgia,serif" fill="currentColor">4</text>`;
     strs.push(st+s);ends.push(x);
   });
@@ -395,6 +408,8 @@ $('#score').onclick=ev=>{if(rec.on)return;const g=ev.target.closest('[data-ei]')
 $('#mPlus').onclick=()=>{if(rec.on)return;sc.measures.push([]);save();render()};
 $('#mMinus').onclick=()=>{if(rec.on||!sc.measures.length)return;sc.measures.pop();if(sel&&sel.mi>=sc.measures.length)closeEd();save();render()};
 $('#bPlay').onclick=play;
+function drawMet(){$('#bMet').textContent=S.click&&S.vol>0?'🔔 Metronomo':'🔕 Metronomo'}
+$('#bMet').onclick=()=>{S.click=!S.click;if(S.click&&!S.vol)S.vol=60;save();drawMet()};
 $('#bPrint').onclick=()=>{$('#printTitle').textContent=sc.name;window.print()};
 $('#title').oninput=e=>{sc.name=e.target.value||'Senza titolo';save()};
 /* ---------- SETTINGS ---------- */
@@ -412,6 +427,7 @@ function drawSet(){
   <div class="row"><div>Sensibilità microfono<small>Aumenta se non sente le note, diminuisci se c'è rumore</small></div><input type="range" id="sens" min="1" max="10" value="${S.sens}"></div>
   <div class="row"><div>LA di riferimento (Hz)</div><input type="number" id="a4" min="415" max="466" value="${S.a4}" style="width:80px"></div>
   <div class="row"><div>Metronomo sonoro</div>${tg('click',S.click)}</div>
+  <div class="row"><div>Volume metronomo<small>${S.vol}%</small></div><input type="range" id="vol" min="0" max="100" value="${S.vol}"></div>
   <div class="row"><div>Conteggio iniziale (1 battuta)</div>${tg('countIn',S.countIn)}</div>
   <div class="row"><div>Mostra corda e tasto</div>${tg('tab',S.tab)}</div>
   <div class="row" style="border:0"><div>Tema</div><div class="sw">${Object.keys(THEMES).map(t=>`<button data-th="${t}" class="${S.theme===t?'on':''}" title="${t}" style="background:linear-gradient(135deg,${THEMES[t][0]},${THEMES[t][1]})"></button>`).join('')}</div></div>`;
@@ -426,10 +442,11 @@ $('#pSet').onchange=$('#pSet').oninput=ev=>{const t=ev.target;if(!t.id)return;
   if(t.id==='fMin'){S.fMin=+t.value;if(S.fMax<S.fMin)S.fMax=S.fMin}
   if(t.id==='fMax')S.fMax=+t.value;
   if(t.id==='bpm'){if(rec.on)return;sc.bpm=+t.value;t.previousElementSibling.querySelector('small').textContent='♩ = '+sc.bpm;save();render();return}
+  if(t.id==='vol'){S.vol=+t.value;t.previousElementSibling.querySelector('small').textContent=S.vol+'%';save();drawMet();return}
   if(t.id==='sens'){S.sens=+t.value;save();return}
   if(t.id==='a4'){const v=+t.value;if(v>=415&&v<=466)S.a4=v;save();return}
   apply()};
-function apply(){calcAllowed();save();drawSet();drawCtrl();if(sel)drawEd();render()}
+function apply(){calcAllowed();drawMet();save();drawSet();drawCtrl();if(sel)drawEd();render()}
 $('#bSet').onclick=()=>{drawSet();$('#shSet').classList.add('open')};
 /* ---------- LIBRARY ---------- */
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -448,7 +465,7 @@ function load(){$('#title').value=sc.name;sel=null;$('#editor').classList.remove
 $('#bLib').onclick=()=>{drawLib();$('#shLib').classList.add('open')};
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s)s.classList.remove('open')});
 /* ---------- INIT ---------- */
-document.documentElement.dataset.theme=S.theme;calcAllowed();load();
+document.documentElement.dataset.theme=S.theme;calcAllowed();drawMet();load();
 setInterval(()=>{if(rec.on&&!rec.paused&&!rec.counting)render()},350);
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,150)});
 </script>
