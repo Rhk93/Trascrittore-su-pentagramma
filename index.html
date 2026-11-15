@@ -572,7 +572,7 @@ function shiftBr(from,d){sc.br=(sc.br||[]).map(i=>i>=from?i+d:i)}
 function placeFab(){const e=$('#editor'),h=e.classList.contains('open')?e.offsetHeight+12:18;['#fab','#fab2'].forEach(q=>$(q).style.bottom=`calc(env(safe-area-inset-bottom) + ${h}px)`)}
 function closeEd(){sel=null;$('#editor').classList.remove('open');drawCtrl();render()}
 function drawEd(){
-  if(!sel)return;const ms=sc.measures[sel.mi],sum=ms.reduce((a,e)=>a+e.d,0),L=sc.beats*4;
+  if(!sel)return;const ms=sc.measures[sel.mi],sum=fillOf(ms),L=sc.beats*4;
   const fb=v=>(v/4).toLocaleString('it-IT',{maximumFractionDigits:2});
   $('#einfo').innerHTML='Battuta '+(sel.mi+1)+' · <span style="color:'+(sum>L?'#ff3b30':sum===L?'#34c759':'var(--mut)')+'">'+fb(sum)+' di '+sc.beats+' tempi</span>';
   $('#bBr').classList.toggle('on',(sc.br||[]).includes(sel.mi));
@@ -583,19 +583,37 @@ function drawEd(){
   $('#eCh').innerHTML=`<select id="cRoot">${(S.lang==='it'?ICH:ECH).map((n,i)=>`<option value="${i}" ${ed.cr===i?'selected':''}>${n}</option>`).join('')}</select><select id="cType">${Object.keys(TYPES).map(t=>`<option value="${t}" ${ed.ct===t?'selected':''}>${t==='maj'?'maggiore':t==='min'?'minore':TYPES[t][1]}</option>`).join('')}</select><button class="ch nt" data-a="chord">Inserisci accordo</button>`;
 }
 $('#editor').onchange=ev=>{if(ev.target.id==='cRoot')ed.cr=+ev.target.value;if(ev.target.id==='cType')ed.ct=ev.target.value};
+/* ---- somma dei valori = battuta piena ---- */
+const EPS=1e-9,msum=ms=>ms.reduce((a,e)=>a+e.d,0);
+function norm(ms){const L=sc.beats*4;for(let i=ms.length-1;i>=0;i--)if(ms[i].pad)ms.splice(i,1);
+  for(let i=ms.length-1;i>0;i--)if(ms[i].m===null&&ms[i-1].m===null&&!ms[i].pad&&!ms[i-1].pad){ms[i-1].d+=ms[i].d;ms.splice(i,1)}
+  const s=msum(ms);if(ms.length&&s<L-EPS)ms.push({m:null,d:L-s,pad:1});if(ms.length&&ms.every(e=>e.m===null))ms.length=0;return ms}
+function packMs(evs,L){const ms=[];let cur=[],fill=0;
+  for(const x of evs){let d=x.d,first=true;while(d>EPS){const k=Math.min(d,L-fill);cur.push(x.m===null?{m:null,d:k}:Object.assign({m:x.m,d:k,t:d-k>EPS?true:!!x.t},first&&x.c?{c:x.c,f:x.f}:{}));fill+=k;d-=k;first=false;if(fill>=L-EPS){ms.push(cur);cur=[];fill=0}}}
+  if(cur.length)ms.push(cur);return ms.map(norm)}
+function fixAll(){const L=sc.beats*4,n=sc.measures.length;
+  if(sc.measures.some(ms=>msum(ms)>L+EPS)){const evs=[];sc.measures.forEach(ms=>{if(!ms.length)evs.push({m:null,d:L});else ms.forEach(e=>{if(!e.pad)evs.push(e)})});const r=packMs(evs,L);while(r.length<n)r.push([]);sc.measures=r}
+  else sc.measures.forEach(norm)}
+const fillOf=ms=>msum(ms.filter(e=>!e.pad));
+function addEv(ms,o){const L=sc.beats*4,av=L-fillOf(ms);if(av<=EPS){toast('Battuta piena ('+sc.beats+'/4): tocca una nota o una pausa per cambiarla');return false}
+  if(o.d>av+EPS){o.d=av;toast('Ho accorciato il valore: nella battuta restava solo '+(av/4).toLocaleString('it-IT')+' di quarto')}
+  for(let i=ms.length-1;i>=0;i--)if(ms[i].pad)ms.splice(i,1);ms.push(o);return true}
+function setDur(ms,i,nd){const e=ms[i];let j=i+1,free=0;while(j<ms.length&&ms[j].m===null){free+=ms[j].d;j++}
+  if(nd>e.d+free+EPS){nd=e.d+free;toast('Spazio finito: la battuta deve fare '+sc.beats+'/4')}
+  const rest=e.d+free-nd;ms.splice(i+1,j-i-1);e.d=nd;if(rest>EPS)ms.splice(i+1,0,{m:null,d:rest})}
 $('#editor').onclick=ev=>{
   const b=ev.target.closest('button');if(!b||!sel)return;
   const ms=sc.measures[sel.mi],e=sel.ei!=null?ms[sel.ei]:null,a=b.dataset.a;
-  if(b.dataset.d){ed.v=+b.dataset.d;if(ed.v===0.25)ed.dot=false;if(e)e.d=edD()}
-  else if(b.dataset.n){const m=(ed.oct+1)*12+SEM[+b.dataset.n]+(ed.sharp?1:0);if(e){if(ed.stk&&e.m!==null){const a=NOTES(e).slice(),j=a.indexOf(m);if(j>=0)a.splice(j,1);else a.push(m);a.sort((x,y)=>x-y);e.m=a.length?(a.length===1?a[0]:a):null}else e.m=m;delete e.c;delete e.f}else{ms.push({m,d:edD()});if(ed.stk)sel.ei=ms.length-1}ensureAC();pluck(m,ac.currentTime+.01,.4,.3)}
-  else if(a==='dot'){ed.dot=!ed.dot&&ed.v>0.25;if(e)e.d=edD()}
+  if(b.dataset.d){ed.v=+b.dataset.d;if(ed.v===0.25)ed.dot=false;if(e)setDur(ms,sel.ei,edD())}
+  else if(b.dataset.n){const m=(ed.oct+1)*12+SEM[+b.dataset.n]+(ed.sharp?1:0);if(e){if(ed.stk&&e.m!==null){const a=NOTES(e).slice(),j=a.indexOf(m);if(j>=0)a.splice(j,1);else a.push(m);a.sort((x,y)=>x-y);e.m=a.length?(a.length===1?a[0]:a):null}else e.m=m;delete e.c;delete e.f}else{if(addEv(ms,{m,d:edD()})&&ed.stk)sel.ei=ms.length-1}ensureAC();pluck(m,ac.currentTime+.01,.4,.3)}
+  else if(a==='dot'){ed.dot=!ed.dot&&ed.v>0.25;if(e)setDur(ms,sel.ei,edD())}
   else if(a==='sh')ed.sharp=!ed.sharp;
   else if(a==='o-')ed.oct=Math.max(1,ed.oct-1);
   else if(a==='o+')ed.oct=Math.min(6,ed.oct+1);
   else if(a==='stk')ed.stk=!ed.stk;
-  else if(a==='chord'){const fr=voicing(ed.cr,ed.ct),o={m:vNotes(fr),c:[ed.cr,ed.ct],f:fStr(fr)};if(e){Object.assign(e,o)}else ms.push(Object.assign({d:edD()},o));ensureAC();o.m.forEach((m,i)=>pluck(m,ac.currentTime+.01+i*.03,.8,.2))}
-  else if(a==='rest'){if(e){e.m=null;delete e.t;delete e.c;delete e.f}else ms.push({m:null,d:edD()})}
-  else if(a==='del'){if(e){ms.splice(sel.ei,1);sel.ei=null}else ms.pop()}
+  else if(a==='chord'){const fr=voicing(ed.cr,ed.ct),o={m:vNotes(fr),c:[ed.cr,ed.ct],f:fStr(fr)};if(e){Object.assign(e,o);delete e.pad}else addEv(ms,Object.assign({d:edD()},o));ensureAC();o.m.forEach((m,i)=>pluck(m,ac.currentTime+.01+i*.03,.8,.2))}
+  else if(a==='rest'){if(e){e.m=null;delete e.t;delete e.c;delete e.f;delete e.pad}else addEv(ms,{m:null,d:edD()})}
+  else if(a==='del'){const real=ms.filter(x=>!x.pad);if(e){if(e===real[real.length-1])ms.splice(sel.ei,1);else ms[sel.ei]={m:null,d:e.d};sel.ei=null}else if(real.length)ms.splice(ms.indexOf(real[real.length-1]),1)}
   else if(a==='br'){const b=sc.br=sc.br||[],j=b.indexOf(sel.mi);if(j<0)b.push(sel.mi);else b.splice(j,1)}
   else if(a==='insB'){shiftBr(sel.mi,1);sc.measures.splice(sel.mi,0,[]);sel.ei=null}
   else if(a==='insA'){shiftBr(sel.mi+1,1);sc.measures.splice(sel.mi+1,0,[]);sel={mi:sel.mi+1,ei:null}}
@@ -604,6 +622,7 @@ $('#editor').onclick=ev=>{
   else if(a==='close')return closeEd();
   else if(a==='recHere')return startRec();
   else if(a==='clrAll')return clrAll();
+  const cm=sc.measures[sel.mi];if(cm){if(e&&sel.ei!=null&&!cm[sel.ei])sel.ei=null;fixAll();if(sel.ei!=null&&!sc.measures[sel.mi][sel.ei])sel.ei=null}
   save();drawEd();render();
 };
 $('#score').onclick=ev=>{if(rec.on)return;const g=ev.target.closest('[data-ei]'),r=ev.target.closest('[data-mi]');
@@ -641,7 +660,7 @@ const tg=(k,v)=>`<button class="tg ${v?'on':''}" data-t="${k}"></button>`;
 const MODESEG=()=>seg2('mode',[['single','Note singole'],['bi','Bicordi'],['chord','Accordi'],['all','Tutto']],S.mode);
 const GRIDSEG=()=>seg2('grid',[[4,'♩ Semiminima'],[2,'♪ Croma'],[1,'Semicroma'],[0.5,'Biscroma'],[0.25,'Semibiscroma']],S.grid);
 function setKV(k,v){if(rec.on&&k!=='snd'&&k!=='pspd'&&k!=='pz'){toast('Termina prima la registrazione');return false}
-  if(k==='beats')sc.beats=+v;else S[k]=(k==='grid'||k==='pspd'||k==='pz')?+v:v;return true}
+  if(k==='beats'){sc.beats=+v;fixAll();save()}else S[k]=(k==='grid'||k==='pspd'||k==='pz')?+v:v;return true}
 function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','🎸 Chitarra'],['syn','Semplice']],S.snd)}${seg2('pspd',[[0.5,'50%'],[0.75,'75%'],[1,'100%'],[1.25,'125%'],[1.5,'150%']],S.pspd)}`}
 $('#quick').onclick=ev=>{const b=ev.target.closest('button');if(!b||!b.dataset.k)return;const k=b.dataset.k;if(setKV(k,b.dataset.v)){if(k==='snd'||k==='pspd'){save();drawQuick();if(k==='snd'){ensureAC();pluck(48,ac.currentTime+.02,1,.3);pluck(52,ac.currentTime+.04,1,.3);pluck(55,ac.currentTime+.06,1,.3)}}else apply()}};
 function drawSet(){
@@ -692,7 +711,7 @@ $('#pLib').onclick=ev=>{if(rec.on)return toast('Termina prima la registrazione')
   else if(b.dataset.del){if(!confirm('Eliminare questo spartito?'))return;lib=lib.filter(s=>s.id!==b.dataset.del);if(!lib.length)lib.push(newScore());if(!lib.includes(sc))sc=lib[0];save();drawLib();load()}
   else if(b.dataset.open){sc=lib.find(s=>s.id===b.dataset.open);open()}};
 function open(){save();$('#shLib').classList.remove('open');load()}
-function load(){$('#title').value=sc.name;sel=null;drawQuick();$('#editor').classList.remove('open');drawCtrl();render()}
+function load(){fixAll();$('#title').value=sc.name;sel=null;drawQuick();$('#editor').classList.remove('open');drawCtrl();render()}
 $('#bLib').onclick=()=>{drawLib();$('#shLib').classList.add('open')};
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s)s.classList.remove('open')});
 /* ---------- INIT ---------- */
