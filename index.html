@@ -155,7 +155,7 @@ const THEMES={arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramon
 
 let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',countIn:true,tab:true,theme:'arcobaleno'},LS.get('sdv_set',{}));
 if(!S.v2){S.grid=2;S.v2=1}
-if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;
+if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}
 const POLY=()=>S.mode!=='single';
 const newScore=()=>({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'Nuovo spartito',bpm:60,beats:4,measures:[[],[],[],[]]});
 let lib=LS.get('sdv_lib',[]);if(!lib.length)lib.push(newScore());
@@ -320,13 +320,13 @@ function metro(now){
   const bm=60000/sc.bpm;
   if(rec.on&&rec.counting){if(now<rec.cs)return;const k=Math.floor((now-rec.cs)/bm);
     if(k>=sc.beats){rec.counting=false;rec.t0=rec.cs+sc.beats*bm;rec.acc=0;rec.beat=-1;status(recMsg())}
-    else if(k!==rec.beat){rec.beat=k;tick(k===0,k,S.vol>0);status('Conteggio… '+(k+1))}return}
+    else{const bn=$('#bigNote');bn.style.fontSize='';bn.textContent=sc.beats-k;if(k!==rec.beat){rec.beat=k;tick(k===0,k,true);status('Battuta a vuoto… '+(k+1)+' di '+sc.beats)}}return}
   if(rec.on&&!rec.paused){const k=Math.floor(clock()/bm);if(k!==rec.beat){rec.beat=k;tick(k%sc.beats===0,k%sc.beats,S.click&&S.vol>0)}}
 }
 function tick(acc,k,sound){
   if(!sound)return;rec.lastClick=performance.now();
   const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=acc?2200:1600;
-  const vv=S.vol/100;g.gain.setValueAtTime((acc?.3:.2)*vv+.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.035);
+  const vv=S.vol>0?S.vol/100:(rec.counting?.5:0);g.gain.setValueAtTime((acc?.3:.2)*vv+.0001,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.035);
   o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.04);
 }
 const recMsg=()=>rec.at==null?'● Registrazione…':'● Registrazione sulla battuta '+(rec.at+1)+'…';
@@ -555,7 +555,7 @@ function drawSet(){
   <div class="row"><div>LA di riferimento (Hz)</div><input type="number" id="a4" min="415" max="466" value="${S.a4}" style="width:80px"></div>
   <div class="row"><div>Metronomo sonoro</div>${tg('click',S.click)}</div>
   <div class="row"><div>Volume metronomo<small>${S.vol}%</small></div><input type="range" id="vol" min="0" max="100" value="${S.vol}"></div>
-  <div class="row"><div>Conteggio iniziale (1 battuta)</div>${tg('countIn',S.countIn)}</div>
+  <div class="row"><div>Battuta a vuoto prima di registrare</div>${tg('countIn',S.countIn)}</div>
   <div class="row"><div>Mostra corda e tasto</div>${tg('tab',S.tab)}</div>
   <div class="row" style="border:0"><div>Tema</div><div class="sw">${Object.keys(THEMES).map(t=>`<button data-th="${t}" class="${S.theme===t?'on':''}" title="${t}" style="background:linear-gradient(135deg,${THEMES[t][0]},${THEMES[t][1]})"></button>`).join('')}</div></div>`;
 }
