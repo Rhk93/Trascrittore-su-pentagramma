@@ -6,6 +6,7 @@
 <title>Spartito dal Vivo</title>
 <style>
 :root{--bg:linear-gradient(160deg,#fff0f7,#eef5ff 55%,#effff5);--card:rgba(255,255,255,.82);--ink:#1c1c1e;--mut:#8e8e93;--accent:#ff4f8b;--accent2:#6c5cff;--line:rgba(0,0,0,.08)}
+[data-theme=azzurro]{--bg:linear-gradient(160deg,#e3f4ff,#f0faff 55%,#e6f7ff);--accent:#1e9bf0;--accent2:#38c6f4}
 [data-theme=mare]{--bg:linear-gradient(160deg,#e6f6ff,#f2fbff 60%,#e9fffb);--accent:#0a84ff;--accent2:#14b8a6}
 [data-theme=tramonto]{--bg:linear-gradient(160deg,#fff3e3,#fff0f0 60%,#fff8e8);--accent:#ff7a00;--accent2:#ff2d55}
 [data-theme=menta]{--bg:linear-gradient(160deg,#eafff4,#f4fff9 60%,#eef9ff);--accent:#00b383;--accent2:#5856d6}
@@ -154,11 +155,11 @@ function voicing(r,ty){const o=OPEN[r+':'+ty];if(o)return o;const be=(r+8)%12,ba
 const vNotes=fr=>fr.map((f,i)=>f<0?null:STR[i].m+f).filter(x=>x!==null);
 const fStr=fr=>fr.map(f=>f<0?'x':f).join(fr.some(f=>f>9)?'-':'');
 const chName=c=>(S.lang==='it'?ICH:ECH)[c[0]]+TYPES[c[1]][1];
-const THEMES={arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
+const THEMES={azzurro:['#1e9bf0','#38c6f4'],arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
 
-let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',snd:'gtr',pspd:1,countIn:true,tab:true,theme:'arcobaleno'},LS.get('sdv_set',{}));
+let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
 if(!S.v2){S.grid=2;S.v2=1}
-if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}
+if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}if(!S.v5){S.theme='azzurro';S.v5=1}
 const POLY=()=>S.mode!=='single';
 const newScore=()=>({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'Nuovo spartito',bpm:60,beats:4,measures:[[],[],[],[]]});
 let lib=LS.get('sdv_lib',[]);if(!lib.length)lib.push(newScore());
@@ -312,9 +313,14 @@ function seg(obs,r){
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
-  ev=ev.filter((e,i)=>!(e.m!==null&&!e.live&&e.e-e.s<50&&i>0));
-  const q=x=>Math.round(x/u/g)*g;let seq=[];
-  ev.forEach((e,i)=>{const p=q(e.s);let n=i<ev.length-1?q(ev[i+1].s):q(e.e);if(e.live&&e.m!==null&&n<=p)n=p+g;if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
+  ev=ev.filter((e,i)=>!(e.m!==null&&!e.live&&e.e-e.s<Math.max(50,0.45*g*u)&&i>0)); // troppo brevi = rumore
+  // allineamento al tempo: ritardo medio sugli attacchi + aggancio preferendo battiti, poi crome, poi semicrome
+  const bt=4*u,devs=ev.filter(e=>e.m!==null).map(e=>{const b=e.s/bt;return b-Math.round(b)}).filter(d=>Math.abs(d)<0.3).sort((a,b)=>a-b);
+  const off=devs.length>=2?devs[devs.length>>1]:0,LV=[[1,0],[0.5,0.08],[0.25,0.16],[0.125,0.22]].filter(l=>l[0]>=g/4);
+  const snap=x=>{const b=Math.max(0,x/bt-off);let bc=0,bs=1e9;for(const[l,pn]of LV){const c=Math.round(b/l)*l,sc2=Math.abs(b-c)+pn;if(sc2<bs){bs=sc2;bc=c}}return bc*4};
+  const Q=ev.map(e=>snap(e.s));for(let i=1;i<Q.length;i++)if(Q[i]<=Q[i-1]&&ev[i].m!==null&&ev[i-1].m!==null&&ev[i].e-ev[i].s>=g*u*0.6)Q[i]=Q[i-1]+g; // due note diverse non sullo stesso punto
+  let seq=[];
+  ev.forEach((e,i)=>{const p=Q[i];let n=i<ev.length-1?Q[i+1]:Math.max(p,snap(e.e));if(e.live&&e.m!==null&&n<=p)n=p+g;if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
   if(!seq.some(x=>x.m!==null))return[];
   const ms=[];let cur=[],fill=0;
