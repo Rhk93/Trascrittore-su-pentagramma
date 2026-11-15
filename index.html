@@ -61,8 +61,9 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
 .row small{color:var(--mut);display:block;font-size:12px}
 .seg{display:flex;background:var(--line);border-radius:10px;padding:2px}
-#quick .spd{display:flex;align-items:center;gap:8px;width:100%;max-width:420px;justify-content:center}#quick .spd input{flex:1;width:auto;height:28px}#quick .spd b{min-width:46px;text-align:right;font-size:14px;color:var(--accent)}
+#quick .spd{display:flex;align-items:center;gap:8px;width:100%;max-width:420px;justify-content:center}#quick .spd input{flex:1;width:auto;height:28px}#quick .spd b{min-width:66px;text-align:right;font-size:14px;color:var(--accent)}
 #quick .seg{flex-wrap:wrap;justify-content:center}
+.page{background:#fff;color:#111;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:210/297;overflow:hidden;padding:5%;margin-bottom:10px;--accent2:#1e7fd0;--mut:#888;--accent:#1e7fd0}.page .pt{text-align:center;font-weight:700;font-size:15px}.page .pm{text-align:center;font-size:9px;color:#777;margin-bottom:4px}.page svg{display:block;width:100%;height:auto}
 .seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer}
 .seg button.on{background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,.15);color:var(--accent)}
 select,input[type=number]{font:inherit;padding:7px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
@@ -111,8 +112,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
       <button class="btn sm" id="bPhone"></button>
       <button class="btn sm" id="bMet"></button>
       <button class="btn sm" id="bPlay">▶ Ascolta</button>
-      <button class="btn sm" id="bPrint">PDF</button>
-      <button class="btn sm" id="bImg">Immagine</button>
+      <button class="btn sm" id="bPrint">Esporta</button>
       <button class="btn sm" id="bClrAll" style="color:#ff3b30">Svuota tutto</button>
     </div>
     <div class="bar2" id="quick"></div>
@@ -134,6 +134,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 </div>
 
 <div id="printArea"></div>
+<div class="sheet" id="shExp"><div class="panel" id="pExp"></div></div>
 <div class="sheet" id="shSet"><div class="panel" id="pSet"></div></div>
 <div class="sheet" id="shLib"><div class="panel" id="pLib"></div></div>
 <div id="fab2"><div id="pbInfo"><span id="pbTxt"></span><i><b id="pbBar"></b></i></div><button id="fpP" title="Ascolta/Pausa">▶</button><button id="fpS" title="Stop">■</button></div>
@@ -151,6 +152,12 @@ const IT=['DO','DO#','RE','RE#','MI','FA','FA#','SOL','SOL#','LA','LA#','SI'];
 const EN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const LETI=['DO','RE','MI','FA','SOL','LA','SI'],LETE=['C','D','E','F','G','A','B'];
 const LET=[0,0,1,1,2,3,3,4,4,5,5,6],SH=[0,1,0,1,0,0,1,0,1,0,1,0],SEM=[0,2,4,5,7,9,11];
+const KS_SH=[3,0,4,1,5,2,6],KS_FL=[6,2,5,1,4,0,3],KS_STS=[8,5,9,6,3,7,4],KS_FTS=[4,7,3,6,2,5,1];
+const KEYN={0:'DO / LAm',1:'SOL / MIm',2:'RE / SIm',3:'LA / FA#m',4:'MI / DO#m',5:'SI / SOL#m',6:'FA# / RE#m',7:'DO# / LA#m','-1':'FA / REm','-2':'SIb / SOLm','-3':'MIb / DOm','-4':'LAb / FAm','-5':'REb / SIbm','-6':'SOLb / MIbm','-7':'DOb / LAbm'};
+function keyAcc(){const k=sc.key||0,a=[0,0,0,0,0,0,0];if(k>0)for(let i=0;i<k;i++)a[KS_SH[i]]=1;else for(let i=0;i<-k;i++)a[KS_FL[i]]=-1;return a}
+function spell(m){const pc=m%12,o=Math.floor(m/12)-1;if(!SH[pc])return{l:LET[pc],a:0,o};if((sc.key||0)<0)return{l:LET[pc]+1,a:-1,o};return{l:LET[pc],a:1,o}}
+const spName=m=>{const q=spell(m);return(S.lang==='it'?LETI:LETE)[q.l]+(q.a>0?'#':q.a<0?'b':'')};
+let RL=1,RT=true;
 const DUR=[16,12,8,6,4,3,2,1.5,1,0.5,0.25];
 const DNAME={16:'Semibreve',8:'Minima',4:'Semiminima',2:'Croma',1:'Semicroma',0.5:'Biscroma',0.25:'Semibiscroma'};
 const NOTES=e=>e.m==null?[]:Array.isArray(e.m)?e.m:[e.m];
@@ -170,7 +177,7 @@ const fStr=fr=>fr.map(f=>f<0?'x':f).join(fr.some(f=>f>9)?'-':'');
 const chName=c=>(S.lang==='it'?ICH:ECH)[c[0]]+TYPES[c[1]][1];
 const THEMES={azzurro:['#1e9bf0','#38c6f4'],arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
 
-let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',pz:1,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
+let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',pz:1,xpr:4,xlab:1,xtab:true,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
 if(!S.v2){S.grid=2;S.v2=1}
 if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}if(!S.v5){S.theme='azzurro';S.v5=1}
 const POLY=()=>S.mode!=='single';
@@ -460,7 +467,7 @@ function startPos(){if(!sel)return 0;const L=sc.beats*4;let p=0;for(let i=0;i<se
 function stopAudio(){playing.forEach(o=>{try{o.stop()}catch(e){}});playing=[];clearTimeout(playT)}
 function playFrom(pos){
   ensureAC();stopAudio();if(S.snd!=='syn'){const need=new Set();flat().out.forEach(x=>{if(x.p>=pos-1)NOTES(x.e).forEach(m=>need.add(m))});need.forEach(m=>S.snd==='pia'?pnBuf(m):ksBuf(m))}
-  const{out,end}=flat(),u=60/(sc.bpm*S.pspd)/4,t0=ac.currentTime+.08;let last=null;
+  const{out,end}=flat(),u=60/(sc.pbpm||sc.bpm)/4,t0=ac.currentTime+.08;let last=null;
   const st=out.filter(x=>x.p<=pos).pop();if(st)pos=st.p;
   out.forEach(x=>{if(x.p<pos){last=null;return}const e=x.e;if(e.m!==null){const k=JSON.stringify(e.m);if(last&&last.tie&&last.k===k)last.d+=e.d*u;else{last={ns:NOTES(e),k,t:t0+(x.p-pos)*u,d:e.d*u};queue.push(last)}last.tie=!!e.t}else last=null});
   queue.forEach(n=>n.ns.forEach((m,i)=>pluck(m,n.t+i*0.018,n.d,n.ns.length>1?.2:.35)));queue.length=0;
@@ -515,8 +522,8 @@ function drawNote(p,x,col){
   if(p.first){
     if(p.c){s+=`<text x="${x}" y="13" text-anchor="middle" font-size="12.5" font-weight="800" fill="var(--accent)">${chName(p.c)}</text>`;
 }
-    else{for(let i=n-1,j=0;i>=0;i--,j++)s+=`<text x="${x}" y="${152+j*11}" text-anchor="middle" font-size="${n>1?10.5:11.5}" font-weight="700" fill="var(--accent2)">${nm(p.ns[i],0)}</text>`;
-      if(S.tab&&n===1){const q=pos(p.ns[0]);if(q)s+=`<text x="${x}" y="167" text-anchor="middle" font-size="9.5" fill="var(--mut)">${q.s}ª·${q.f}</text>`}}}
+    else{for(let i=n-1,j=0;i>=0;i--,j++){if(RL)s+=`<text x="${x}" y="${152+j*11*RL}" text-anchor="middle" font-size="${(n>1?10.5:11.5)*RL}" font-weight="700" fill="var(--accent2)">${spName(p.ns[i])}</text>`}
+      if(RL&&RT&&n===1){const q=pos(p.ns[0]);if(q)s+=`<text x="${x}" y="${152+15*RL}" text-anchor="middle" font-size="${9.5*RL}" fill="var(--mut)">${q.s}ª·${q.f}</text>`}}}
   return s;
 }
 const CF="'Noto Music','Bravura','Segoe UI Symbol','Apple Symbols',serif";let CLEF=null;
@@ -541,10 +548,10 @@ function render(opt){opt=opt||{};
     const it=[];
     if(!ms.length)it.push({rest:true,v:16,empty:true,w:60});
     else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null),ns=NOTES(e).slice().sort((a,b)=>a-b),cont=prevT;prevT=!!e.t&&ns.length>0;ps.forEach((v,pi)=>it.push({ns,live:e.live,rest:!ns.length,v,ei,first:pi===0&&!cont,c:e.c,f:e.f,tie:ns.length>0&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
-    const acc={};
+    const acc={},KA=keyAcc();
     it.forEach(p=>{p.lines=1;if(p.rest)return;p.st=[];p.acc=[];let na=0;
-      p.ns.forEach(m=>{const wm=m+12,dk=diat(wm),sh=SH[wm%12];p.st.push(dk-30);let a='';
-        if(sh&&acc[dk]!=='#'){a='♯';acc[dk]='#'}else if(!sh&&acc[dk]==='#'){a='♮';acc[dk]='n'}p.acc.push(a);if(a)na++});
+      p.ns.forEach(m=>{const q=spell(m+12),dk=q.l+7*q.o;p.st.push(dk-30);let a='';const cur=dk in acc?acc[dk]:KA[q.l];
+        if(q.a!==cur){a=q.a>0?'♯':q.a<0?'♭':'♮';acc[dk]=q.a}p.acc.push(a);if(a)na++});
       p.na=na;if(na)p.w+=9+(na>1?9:0);
       for(let i=1;i<p.st.length;i++)if(p.st[i]-p.st[i-1]<=1){p.w+=11;break}
       if(p.first&&p.c)p.w=Math.max(p.w,chName(p.c).length*8+12);
@@ -552,20 +559,21 @@ function render(opt){opt=opt||{};
     const sum=ms.reduce((a,e)=>a+e.d,0);
     return{it,mi,w:16+it.reduce((a,p)=>a+p.w,0),over:sum>L};
   });
-  const PRE=46,TS=24,rows=[];let row=null;
-  const BR=new Set(sc.br||[]),PR=(S.phone&&!opt.host&&innerHeight>innerWidth)?2:4;
+  RL=opt.host?(opt.RL??1):1;RT=opt.host?(opt.RT??S.tab):S.tab;
+  const KN=Math.abs(sc.key||0),PRE=46+(KN?KN*9+6:0),TS=30,rows=[];let row=null;
+  const BR=new Set(sc.br||[]),PR=opt.perRow||((S.phone&&!opt.host&&innerHeight>innerWidth)?2:4);
   lays.forEach((ly,i)=>{if(!row||row.ms.length>=PR||BR.has(i-1)){row={ms:[],pre:i===0?PRE+TS:PRE};row.w=row.pre;rows.push(row)}row.ms.push(ly);row.w+=ly.w});
   const notes=[],strs=[],ends=[],rhs=[];
   rows.forEach((row,ri)=>{
     const tot=row.ms.reduce((a,l)=>a+l.w,0);let k=(W-4-row.pre)/tot;if(ri===rows.length-1&&row.ms.length<PR&&!BR.has(row.ms[row.ms.length-1].mi))k=Math.min(k,1.25);k=Math.max(k,0.85);
-    const RH=Math.max(H,152+(Math.max(...row.ms.flatMap(l=>l.it.map(p=>p.lines)))-1)*11+(S.tab?22:12));rhs.push(RH);
+    const RH=RL?Math.max(H*Math.max(1,RL*0.92),152+(Math.max(...row.ms.flatMap(l=>l.it.map(p=>p.lines)))-1)*11*RL+(RT?22:12)*RL):146;rhs.push(RH);
     let s='',x=row.pre;
     row.ms.forEach(ly=>{
-      const mw=ly.w*k,mi=ly.mi,isM=!opt.host&&((sel&&sel.mi===mi)||(rec.on&&rec.at===mi)||(PB.on&&PB.hl&&+PB.hl.split(':')[0]===mi));
+      const km=opt.host?((W-4-row.pre)/PR)/ly.w:k,mw=ly.w*km,mi=ly.mi,isM=!opt.host&&((sel&&sel.mi===mi)||(rec.on&&rec.at===mi)||(PB.on&&PB.hl&&+PB.hl.split(':')[0]===mi));
       s+=`<rect class="mh" data-mi="${mi}" x="${x+1}" y="6" width="${mw-2}" height="${RH-8}" rx="12" fill="${isM?'var(--accent)':(ly.over&&!opt.host?'#ff3b30':'transparent')}" fill-opacity="${isM||(ly.over&&!opt.host)?.12:0}"/>`;
       s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}${BR.has(mi)?' ↵':''}</text>`;
-      let cx=x+8*k;
-      ly.it.forEach(p=>{const pk=p.w*k,nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;
+      let cx=x+8*km;
+      ly.it.forEach(p=>{const pk=p.w*km,nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;
         const isS=(isM&&sel&&sel.ei===p.ei&&p.ei!==undefined)||(!opt.host&&PB.hl===mi+':'+p.ei),col=isS||p.live?'var(--accent)':'currentColor';
         let g='';
         if(p.rest){g=drawRestFull(p.v,p.empty?x+mw/2:nx,col,p.empty?.35:0);notes.push({rest:true})}
@@ -578,7 +586,8 @@ function render(opt){opt=opt||{};
     });
     let st='';for(let i=0;i<5;i++)st+=ln(4,TOP+i*10,x,TOP+i*10,1);
     const C=clefFit();st+=`<text x="${C.x}" y="${C.y}" font-size="${C.fs}" font-family="${CF}" fill="currentColor">𝄞</text>`;
-    if(ri===0)st+=`<text x="${PRE+10}" y="${TOP+17}" text-anchor="middle" font-size="21" font-weight="800" font-family="Georgia,serif" fill="currentColor">${sc.beats}</text><text x="${PRE+10}" y="${TOP+37}" text-anchor="middle" font-size="21" font-weight="800" font-family="Georgia,serif" fill="currentColor">4</text>`;
+    {const k=sc.key||0;for(let i=0;i<Math.abs(k);i++){const sp=k>0?KS_STS[i]:KS_FTS[i];st+=`<text x="${44+i*9}" y="${yS(sp)+(k>0?6:4)}" font-size="${k>0?19:20}" fill="currentColor">${k>0?'♯':'♭'}</text>`}}
+    if(ri===0){const TF='font-family="Times New Roman,Georgia,serif" font-weight="900" font-size="31" text-anchor="middle" fill="currentColor"';st+=`<text x="${PRE+12}" y="${TOP+20}" ${TF}>${sc.beats}</text><text x="${PRE+12}" y="${TOP+40}" ${TF}>4</text>`}
     strs.push(st+s);ends.push(x);
   });
   notes.forEach((n,i)=>{if(n.rest||!n.tie)return;const nx=notes[i+1],dy=n.up?8:-8,cy=n.up?7:-7;
@@ -681,9 +690,10 @@ function drawPhone(){$('#bPhone').innerHTML=ico('phone')+(S.phone?'Smartphone: 2
 $('#bPhone').onclick=()=>{S.phone=!S.phone;save();drawPhone();render()};
 function drawMet(){$('#bMet').innerHTML=S.click&&S.vol>0?ico('met')+'Metronomo':ico('metoff')+'Metronomo'}
 $('#bMet').onclick=()=>{S.click=!S.click;if(S.click&&!S.vol)S.vol=60;save();drawMet()};
-$('#bImg').onclick=async()=>{
+const XOPT=()=>({W:Math.round(720/S.pz),perRow:S.xpr,RL:S.xlab,RT:S.xtab});
+async function doImg(){
   const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-9999px;top:0;width:720px';document.body.appendChild(tmp);
-  render({host:tmp,W:Math.round(720/S.pz)});const cs=getComputedStyle(document.documentElement),cv=v=>cs.getPropertyValue(v).trim();
+  render(Object.assign({host:tmp},XOPT()));const cs=getComputedStyle(document.documentElement),cv=v=>cs.getPropertyValue(v).trim();
   const svgs=[...tmp.querySelectorAll('svg')],Wd=1440,top=110;let y=top,parts='';
   svgs.forEach(sv=>{const vb=sv.getAttribute('viewBox').split(' ').map(Number),h=vb[3]*Wd/vb[2];parts+=`<svg x="0" y="${y}" width="${Wd}" height="${h}" viewBox="${vb.join(' ')}">${sv.innerHTML}</svg>`;y+=h});
   tmp.remove();const H=Math.ceil(y+50);
@@ -693,8 +703,25 @@ $('#bImg').onclick=async()=>{
     c.toBlob(async bl=>{const fn=(sc.name||'spartito').replace(/[^\w\- àèéìòù]/gi,'_')+'.png',f=new File([bl],fn,{type:'image/png'});
       if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:sc.name});return}catch(e){}}
       const a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);toast('Immagine salvata: '+fn)},'image/png')};
-  img.onerror=()=>toast('Errore nella creazione dell\'immagine');img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(src)};
-$('#bPrint').onclick=()=>{const pa=$('#printArea');pa.innerHTML=`<h1>${esc(sc.name)}</h1><div class="pm">${sc.beats}/4 · ♩ = ${sc.bpm}</div><div id="paS"></div><div class="pf">Copyright © Ignazio Paolicelli</div>`;render({host:$('#paS'),W:Math.round(720/S.pz)});setTimeout(()=>window.print(),80)};
+  img.onerror=()=>toast('Errore nella creazione dell\'immagine');img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(src)}
+function doPrint(){const pa=$('#printArea');pa.innerHTML=`<h1>${esc(sc.name)}</h1><div class="pm">${sc.beats}/4 · ♩ = ${sc.bpm}</div><div id="paS"></div><div class="pf">Copyright © Ignazio Paolicelli</div>`;render(Object.assign({host:$('#paS')},XOPT()));setTimeout(()=>window.print(),80)}
+
+function keySel(){return `<select id="xkey">${[0,1,2,3,4,5,6,7,-1,-2,-3,-4,-5,-6,-7].map(k=>`<option value="${k}" ${(sc.key||0)===k?'selected':''}>${KEYN[k]}${k?' ('+Math.abs(k)+(k>0?'♯':'♭')+')':''}</option>`).join('')}</select>`}
+function drawExp(){$('#pExp').innerHTML=`<h2>Esporta <button class="ib" data-close>✕</button></h2>
+  <div class="page"><div class="pt">${esc(sc.name)}</div><div class="pm">${sc.beats}/4 · ♩ = ${sc.bpm}</div><div id="expPrev"></div></div>
+  <div class="row"><div>Battute per rigo</div>${seg2('xpr',[[2,'2'],[3,'3'],[4,'4'],[5,'5'],[6,'6']],S.xpr)}</div>
+  <div class="row"><div>Grandezza</div>${seg2('pz',[[0.7,'S'],[0.85,'M'],[1,'L'],[1.2,'XL'],[1.4,'XXL']],S.pz)}</div>
+  <div class="row"><div>Nomi delle note</div>${seg2('xlab',[[0,'No'],[0.8,'Piccoli'],[1,'Normali'],[1.3,'Grandi']],S.xlab)}</div>
+  <div class="row"><div>Corda e tasto</div>${tg('xtab',S.xtab)}</div>
+  <div class="row"><div>Armatura di chiave</div>${keySel()}</div>
+  <div class="ctrl"><button class="btn pri" data-x="pdf">${ico('doc')}PDF (A4)</button><button class="btn" data-x="img">${ico('photo')}Immagine</button></div>`;
+  render(Object.assign({host:$('#expPrev')},XOPT()))}
+$('#bPrint').onclick=()=>{if(rec.on)return;drawExp();$('#shExp').classList.add('open')};
+$('#pExp').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;
+  if(b.dataset.close!==undefined)return $('#shExp').classList.remove('open');
+  if(b.dataset.x==='pdf')return doPrint();if(b.dataset.x==='img')return doImg();
+  if(b.dataset.k)S[b.dataset.k]=+b.dataset.v;if(b.dataset.t)S[b.dataset.t]=!S[b.dataset.t];save();drawExp()};
+$('#pExp').onchange=ev=>{if(ev.target.id==='xkey'){sc.key=+ev.target.value;save();drawExp();render()}};
 $('#title').oninput=e=>{sc.name=e.target.value||'Senza titolo';save()};
 /* ---------- SETTINGS ---------- */
 function seg2(key,opts,val){return`<div class="seg">${opts.map(o=>`<button data-k="${key}" data-v="${o[0]}" class="${String(val)===String(o[0])?'on':''}">${o[1]}</button>`).join('')}</div>`}
@@ -706,8 +733,8 @@ function nIco(v){const fl={2:1,1:2,0.5:3,0.25:4}[v]||0,hol=v>=8;let s=`<ellipse 
 const GRIDSEG=()=>seg2('grid',[[4,nIco(4)],[2,nIco(2)],[1,nIco(1)],[0.5,nIco(0.5)],[0.25,nIco(0.25)]],S.grid);
 function setKV(k,v){if(rec.on&&k!=='snd'&&k!=='pspd'&&k!=='pz'){toast('Termina prima la registrazione');return false}
   if(k==='beats'){sc.beats=+v;fixAll();save()}else S[k]=(k==='grid'||k==='pspd'||k==='pz')?+v:v;return true}
-function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','Chitarra'],['pia','Pianoforte'],['syn','Semplice']],S.snd)}<div class="spd">${ico('slow')}<input type="range" id="pspd" min="25" max="200" step="5" value="${Math.round(S.pspd*100)}">${ico('fast')}<b id="pspdV">${Math.round(S.pspd*100)}%</b></div>`}
-$('#quick').oninput=ev=>{if(ev.target.id!=='pspd')return;S.pspd=+ev.target.value/100;$('#pspdV').textContent=ev.target.value+'%';save();
+function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve) · Tempo</div>${GRIDSEG()}${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','Chitarra'],['pia','Pianoforte'],['syn','Semplice']],S.snd)}<div class="spd">${ico('slow')}<input type="range" id="pspd" min="10" max="300" step="1" value="${sc.pbpm||sc.bpm}">${ico('fast')}<b id="pspdV">${sc.pbpm||sc.bpm} bpm</b></div>`}
+$('#quick').oninput=ev=>{if(ev.target.id!=='pspd')return;sc.pbpm=+ev.target.value;$('#pspdV').textContent=ev.target.value+' bpm';save();
   clearTimeout(window._sp);window._sp=setTimeout(()=>{if(PB.on&&!PB.paused){pausePlay();playFrom(PB.pos)}},250)};
 $('#quick').onclick=ev=>{const b=ev.target.closest('button');if(!b||!b.dataset.k)return;const k=b.dataset.k;if(setKV(k,b.dataset.v)){if(k==='snd'||k==='pspd'){save();drawQuick();if(k==='snd'){ensureAC();pluck(48,ac.currentTime+.02,1,.3);pluck(52,ac.currentTime+.04,1,.3);pluck(55,ac.currentTime+.06,1,.3)}}else apply()}};
 function drawSet(){
@@ -718,6 +745,7 @@ function drawSet(){
   <div class="row"><div>Porzione di manico<small>Note riconosciute: ${nm(AMIN,1)} → ${nm(AMAX,1)} (${ALLOWED.size} note)</small></div>
    <div>dal <select id="fMin">${fo(0,14,S.fMin)}</select> al <select id="fMax">${fo(S.fMin,15,S.fMax)}</select></div></div>
   <div class="row"><div>Velocità (BPM)<small>♩ = ${sc.bpm}</small></div><input type="range" id="bpm" min="40" max="200" value="${sc.bpm}"></div>
+  <div class="row"><div>Armatura di chiave</div>${keySel()}</div>
   <div class="row"><div>Tempo</div>${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}</div>
   <div class="row"><div>Nota più breve<small>Precisione delle durate</small></div>${GRIDSEG()}</div>
   <div class="row"><div>Sensibilità microfono<small>Aumenta se non sente le note, diminuisci se c'è rumore</small></div><input type="range" id="sens" min="1" max="10" value="${S.sens}"></div>
@@ -737,6 +765,7 @@ $('#pSet').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;
   apply()};
 $('#pSet').onchange=$('#pSet').oninput=ev=>{const t=ev.target;if(!t.id)return;
   if(t.id==='fMin'){S.fMin=+t.value;if(S.fMax<S.fMin)S.fMax=S.fMin}
+  if(t.id==='xkey'){sc.key=+t.value;save();render();return}
   if(t.id==='fMax')S.fMax=+t.value;
   if(t.id==='bpm'){if(rec.on)return;sc.bpm=+t.value;t.previousElementSibling.querySelector('small').textContent='♩ = '+sc.bpm;save();render();return}
   if(t.id==='vol'){S.vol=+t.value;t.previousElementSibling.querySelector('small').textContent=S.vol+'%';save();drawMet();return}
@@ -762,7 +791,7 @@ function load(){fixAll();$('#title').value=sc.name;sel=null;drawQuick();$('#edit
 $('#bLib').onclick=()=>{drawLib();$('#shLib').classList.add('open')};
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s)s.classList.remove('open')});
 /* ---------- INIT ---------- */
-document.documentElement.dataset.theme=S.theme;[['bImp','note'],['bPrint','doc'],['bImg','photo'],['bClrAll','trash']].forEach(([i,n])=>$('#'+i).insertAdjacentHTML('afterbegin',ico(n)));
+document.documentElement.dataset.theme=S.theme;[['bImp','note'],['bPrint','doc'],['bClrAll','trash']].forEach(([i,n])=>$('#'+i).insertAdjacentHTML('afterbegin',ico(n)));
 calcAllowed();drawMet();drawPhone();drawQuick();load();
 setInterval(()=>{if(rec.on&&!rec.paused&&!rec.counting)render()},100);
 function kick(){if(!rec.k){rec.k=1;requestAnimationFrame(()=>{rec.k=0;render()})}}
