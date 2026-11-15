@@ -63,6 +63,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .seg{display:flex;background:var(--line);border-radius:10px;padding:2px}
 #quick .spd{display:flex;align-items:center;gap:8px;width:100%;max-width:420px;justify-content:center}#quick .spd input{flex:1;width:auto;height:28px}#quick .spd b{min-width:66px;text-align:right;font-size:14px;color:var(--accent)}
 #quick .seg{flex-wrap:wrap;justify-content:center}
+.kgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kb{border:0;border-radius:14px;padding:10px 6px;background:var(--line);color:var(--ink);font-family:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}.kb b{font-size:18px}.kb span{font-size:12px}.kb.on{background:var(--accent);color:#fff}
 .pnav{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px}.page img{display:block;width:100%;height:100%}
 .page{background:#fff;color:#111;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);aspect-ratio:210/297;overflow:hidden;padding:0;margin-bottom:10px;--accent2:#1e7fd0;--mut:#888;--accent:#1e7fd0}.page .pt{text-align:center;font-weight:700;font-size:15px}.page .pm{text-align:center;font-size:9px;color:#777;margin-bottom:4px}.page svg{display:block;width:100%;height:auto}
 .seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer}
@@ -136,6 +137,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 
 <div id="printArea"></div>
 <div class="sheet" id="shExp"><div class="panel" id="pExp"></div></div>
+<div class="sheet" id="shKey"><div class="panel" id="pKey"></div></div>
 <div class="sheet" id="shSet"><div class="panel" id="pSet"></div></div>
 <div class="sheet" id="shLib"><div class="panel" id="pLib"></div></div>
 <div id="fab2"><div id="pbInfo"><span id="pbTxt"></span><i><b id="pbBar"></b></i></div><button id="fpP" title="Ascolta/Pausa">▶</button><button id="fpS" title="Stop">■</button></div>
@@ -615,6 +617,7 @@ function render(opt){opt=opt||{};
     const C=clefFit();st+=`<text x="${C.x}" y="${C.y}" font-size="${C.fs}" font-family="${CF}" fill="currentColor">𝄞</text>`;
     {const k=sc.key||0;for(let i=0;i<Math.abs(k);i++){const sp=k>0?KS_STS[i]:KS_FTS[i];st+=`<text x="${44+i*9}" y="${yS(sp)+(k>0?6:4)}" font-size="${k>0?19:20}" fill="currentColor">${k>0?'♯':'♭'}</text>`}}
     if(ri===0){const TF='font-family="Times New Roman,Georgia,serif" font-weight="900" font-size="31" text-anchor="middle" fill="currentColor"';st+=`<text x="${PRE+12}" y="${TOP+20}" ${TF}>${sc.beats}</text><text x="${PRE+12}" y="${TOP+40}" ${TF}>4</text>`}
+    if(!opt.host)st+=`<rect data-keyhit="1" x="0" y="${TOP-14}" width="${row.pre-(ri===0?TS:0)}" height="68" fill="transparent" style="cursor:pointer"/>`;
     strs.push(st+s);ends.push(x);
   });
   notes.forEach((n,i)=>{if(n.rest||!n.tie)return;const nx=notes[i+1],dy=n.up?8:-8,cy=n.up?7:-7;
@@ -690,7 +693,7 @@ $('#editor').onclick=ev=>{
   const cm=sc.measures[sel.mi];if(cm){if(e&&sel.ei!=null&&!cm[sel.ei])sel.ei=null;fixAll();if(sel.ei!=null&&!sc.measures[sel.mi][sel.ei])sel.ei=null}
   save();drawEd();render();
 };
-$('#score').onclick=ev=>{if(rec.on)return;const g=ev.target.closest('[data-ei]'),r=ev.target.closest('[data-mi]');
+$('#score').onclick=ev=>{if(rec.on)return;if(ev.target.closest('[data-keyhit]'))return openKey();const g=ev.target.closest('[data-ei]'),r=ev.target.closest('[data-mi]');
   if(g)select(+g.dataset.mi,+g.dataset.ei);else if(r)select(+r.dataset.mi,null)};
 $('#mPlus').onclick=()=>{if(rec.on)return;sc.measures.push([]);save();render()};
 $('#mMinus').onclick=()=>{if(rec.on||!sc.measures.length)return;sc.measures.pop();if(sel&&sel.mi>=sc.measures.length)closeEd();save();render()};
@@ -753,6 +756,10 @@ async function doImg(only){const P=buildPages(),sel=only!=null?[only]:P.map((_,i
   if(navigator.canShare&&navigator.canShare({files})){try{await navigator.share({files,title:sc.name});return}catch(e){}}
   files.forEach((f,n)=>setTimeout(()=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},3000)},n*400));toast(files.length>1?files.length+' immagini salvate':'Immagine salvata')}
 function keySel(){return `<select id="xkey">${[0,1,2,3,4,5,6,7,-1,-2,-3,-4,-5,-6,-7].map(k=>`<option value="${k}" ${(sc.key||0)===k?'selected':''}>${KEYN[k]}${k?' ('+Math.abs(k)+(k>0?'♯':'♭')+')':''}</option>`).join('')}</select>`}
+function openKey(){const k0=sc.key||0;
+  $('#pKey').innerHTML=`<h2>Armatura di chiave <button class="ib" data-close>✕</button></h2><div class="kgrid">${[0,1,2,3,4,5,6,7,-1,-2,-3,-4,-5,-6,-7].map(k=>`<button class="kb ${k===k0?'on':''}" data-key="${k}"><b>${k?Math.abs(k)+(k>0?'♯':'♭'):'—'}</b><span>${KEYN[k]}</span></button>`).join('')}</div>`;
+  $('#shKey').classList.add('open')}
+$('#pKey').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;if(b.dataset.close===undefined){sc.key=+b.dataset.key;save();render();toast('Armatura: '+KEYN[sc.key])}$('#shKey').classList.remove('open')};
 let XP=0,XPAGES=[];
 function drawExp(){XPAGES=buildPages();XP=Math.min(XP,XPAGES.length-1);const n=XPAGES.length;
   $('#pExp').innerHTML=`<h2>Esporta <button class="ib" data-close>✕</button></h2>
