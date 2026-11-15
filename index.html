@@ -60,6 +60,7 @@ main{max-width:1100px;margin:0 auto;padding:12px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:15px}
 .row small{color:var(--mut);display:block;font-size:12px}
 .seg{display:flex;background:var(--line);border-radius:10px;padding:2px}
+#quick .seg{flex-wrap:wrap;justify-content:center}
 .seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink);cursor:pointer}
 .seg button.on{background:var(--card);box-shadow:0 1px 4px rgba(0,0,0,.15);color:var(--accent)}
 select,input[type=number]{font:inherit;padding:7px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
@@ -345,7 +346,7 @@ function toMeasures(ev){
 const takeMs=()=>toMeasures(rec.cur?rec.ev.concat([{m:rec.cur.pend?(rec.cur.prov?rec.cur.prov.m:null):rec.cur.m,s:rec.cur.s,e:clock(),c:rec.cur.pend&&rec.cur.prov?rec.cur.prov.c:rec.cur.c,live:true}]):rec.ev);
 const merged=tk=>{if(rec.at==null)return trimEmpty(sc.measures).concat(tk);const a=sc.measures.slice();a.splice(rec.at,Math.min(tk.length,a.length-rec.at),...tk);return a};
 const trimEmpty=a=>{a=a.slice();while(a.length&&!a[a.length-1].length)a.pop();return a};
-async function startRec(imp){
+async function startRec(imp){imp=imp===true;
   if(!imp&&!await initMic())return;stopPlay();const at=sel?sel.mi:null;sel=null;closeEd();
   Object.assign(rec,{at,sil:0,ring:[],hv:1,on:true,paused:false,acc:0,ev:[],cur:{m:null,s:0},pend:null,beat:-1});
   if(S.countIn){rec.counting=true;rec.cs=performance.now()+150}else{rec.counting=false;rec.t0=performance.now();status(recMsg())}
@@ -384,7 +385,7 @@ function drawCtrl(){
   if(!rec.on)c.innerHTML='<button class="btn pri" id="bRec">● Registra'+(sel?' sulla battuta '+(sel.mi+1):'')+'</button>';
   else c.innerHTML='<button class="btn" id="bPause">'+(rec.paused?'▶ Riprendi':'❚❚ Pausa')+'</button><button class="btn red" id="bStop">■ Fine</button>';
   $('#fab').classList.toggle('on',rec.on);document.body.classList.toggle('rec',rec.on);placeFab();if(typeof drawPB==='function')drawPB();$('#fabP').textContent=rec.paused?'▶':'❚❚';
-  const b=$('#bRec');if(b)b.onclick=startRec;
+  const b=$('#bRec');if(b)b.onclick=()=>startRec();
   if($('#bPause')){$('#bPause').onclick=pauseRec;$('#bStop').onclick=stopRec}
   let h='';for(let i=0;i<sc.beats;i++){const x=14+i*34;h+=`<g id="bn${i}" fill="currentColor"><ellipse cx="${x}" cy="48" rx="5.6" ry="4" transform="rotate(-20 ${x} 48)"/><rect x="${x+4.2}" y="26" width="1.6" height="22"/></g>`}
   $('#dots').innerHTML=`<svg width="${sc.beats*34+6}" height="56" style="color:var(--mut)">${h}<circle id="ball" cx="19" cy="20" r="5" fill="var(--accent)"/></svg>`;
@@ -567,9 +568,10 @@ function select(mi,ei){
   if(e){const d=e.d;if([12,6,3,1.5].includes(d)){ed.v=d/1.5;ed.dot=true}else if(DUR.includes(d)){ed.v=d;ed.dot=false}
     const ns=NOTES(e);if(ns.length){const lo=Math.min(...ns);ed.oct=Math.floor(lo/12)-1;ed.sharp=!!SH[lo%12];ensureAC();ns.forEach((m,i)=>pluck(m,ac.currentTime+.01+i*.018,.5,.25))}}
   drawEd();$('#editor').classList.add('open');drawCtrl();render();
+  requestAnimationFrame(()=>{const r=document.querySelector('#score [data-mi="'+mi+'"]');if(!r)return;const b=r.closest('svg').getBoundingClientRect(),top=innerHeight-$('#editor').offsetHeight-12;if(b.bottom>top)window.scrollBy({top:b.bottom-top,behavior:'smooth'})}); // il rigo resta visibile sopra l'editor
 }
 function shiftBr(from,d){sc.br=(sc.br||[]).map(i=>i>=from?i+d:i)}
-function placeFab(){const e=$('#editor'),h=e.classList.contains('open')?e.offsetHeight+12:18;['#fab','#fab2'].forEach(q=>$(q).style.bottom=`calc(env(safe-area-inset-bottom) + ${h}px)`)}
+function placeFab(){const e=$('#editor'),op=e.classList.contains('open'),h=op?e.offsetHeight+12:18;document.body.style.paddingBottom=op?(e.offsetHeight+30)+'px':'';['#fab','#fab2'].forEach(q=>$(q).style.bottom=`calc(env(safe-area-inset-bottom) + ${h}px)`)}
 function closeEd(){sel=null;$('#editor').classList.remove('open');drawCtrl();render()}
 function drawEd(){
   if(!sel)return;const ms=sc.measures[sel.mi],sum=fillOf(ms),L=sc.beats*4;
