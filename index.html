@@ -177,7 +177,7 @@ const fStr=fr=>fr.map(f=>f<0?'x':f).join(fr.some(f=>f>9)?'-':'');
 const chName=c=>(S.lang==='it'?ICH:ECH)[c[0]]+TYPES[c[1]][1];
 const THEMES={azzurro:['#1e9bf0','#38c6f4'],arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
 
-let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',pz:1,xpr:4,xlab:1,xtab:true,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
+let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',chs:5,nf:4,mgain:1,mlo:60,mhi:6000,pz:1,xpr:4,xlab:1,xtab:true,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
 if(!S.v2){S.grid=2;S.v2=1}
 if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}if(!S.v5){S.theme='azzurro';S.v5=1}
 const POLY=()=>S.mode!=='single';
@@ -194,13 +194,15 @@ function pos(m){let b=null;for(const s of STR){const f=m-s.m;if(f>=S.fMin&&f<=S.
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2200)}
 
 /* ---------- AUDIO ---------- */
-let micSrc=null,YCL=1,fbuf=null,lin=null,frameN=0;
+let micOut=null,micHP=null,micLP=null,micG=null,micSrc=null,YCL=1,fbuf=null,lin=null,frameN=0;
 let ac=null,an=null,buf=null,dB=new Float32Array(2400),loop=null,G=0.005;
 function ensureAC(){if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}
+function buildEQ(){micHP=ac.createBiquadFilter();micHP.type='highpass';micLP=ac.createBiquadFilter();micLP.type='lowpass';micG=ac.createGain();micSrc.connect(micHP).connect(micLP).connect(micG);micOut=micG;applyEQ()}
+function applyEQ(){if(!micHP)return;micHP.frequency.value=S.mlo;micHP.Q.value=0.7;micLP.frequency.value=S.mhi;micLP.Q.value=0.7;micG.gain.value=S.mgain}
 async function initMic(){
   ensureAC();if(micSrc)return true;
   try{const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-    const src=ac.createMediaStreamSource(st);micSrc=src;if(an){src.connect(an);return true}an=ac.createAnalyser();an.fftSize=8192;an.smoothingTimeConstant=0;fbuf=new Float32Array(an.frequencyBinCount);lin=new Float32Array(an.frequencyBinCount);src.connect(an);buf=new Float32Array(an.fftSize);
+    const src=ac.createMediaStreamSource(st);micSrc=src;buildEQ();if(an){micOut.connect(an);return true}an=ac.createAnalyser();an.fftSize=8192;an.smoothingTimeConstant=0;fbuf=new Float32Array(an.frequencyBinCount);lin=new Float32Array(an.frequencyBinCount);micOut.connect(an);buf=new Float32Array(an.fftSize);
     loop=setInterval(analyze,20);return true}
   catch(e){toast('Microfono non disponibile: consenti l\'accesso al microfono');return false}
 }
@@ -258,7 +260,7 @@ function multiPitch(M,T,R){
     for(let g=0;g<2&&ALLOWED.has(best-12)&&!used.has(best-12);g++){const As=harm(best-12),od=(As[0]||0)+(As[2]||0)+(As[4]||0),ev=(As[1]||0)+(As[3]||0)+(As[5]||0);if(od>0&&((As[0]||0)>0.3*ev||(As[2]||0)>0.3*ev)){best-=12;bA=As}else break} // errore d'ottava
     if(it===0)first=bs;else if(bs<first*0.2)break;
     const rise=()=>{if(!R)return true;const k=Math.round(mtof(best)/df);let a=0,b=0;for(let j=k-1;j<=k+1;j++){a=Math.max(a,M0[j]);b=Math.max(b,R[j])}return a>=b*1.5};
-    used.add(best);if(tonal(best)>=8&&rise())out.push({m:best,s:bs}); // scarta i rumori (non intonati)
+    used.add(best);if(tonal(best)>=4+(S.nf-1)*1.4&&rise())out.push({m:best,s:bs}); // scarta i rumori (non intonati)
     const f=mtof(best);
     bA.forEach((a,h)=>{const sm=h===0?a:Math.min(a,(bA[h-1]+a+(bA[h+1]||0))/3);const[lo,hi]=win(f*(h+1));for(let k=lo-1;k<=hi+1;k++)M[k]=Math.max(0,M[k]-sm)});
   }
@@ -274,13 +276,13 @@ function matchChord(out){
     for(let pc=0;pc<12;pc++)if(!tones.includes(pc))outW+=p[pc];
     const sc=inW-1.2*outW-miss+(bass===r?0.12:0)-(iv.length>3?0.04:0)-(/sus|dim/.test(ty)?0.1:0);
     if(!best||sc>best.sc)best={r,ty,sc,outW}}
-  return best&&best.sc>=0.5&&best.outW<0.3?best:null;
+  return best&&best.sc>=0.72-(S.chs-1)*0.03&&best.outW<0.25?best:null;
 }
 function analyzePoly(M,T,R){
-  let out=multiPitch(M,T,R);if(!out.length||out.expl<0.25)return{m:null}; // rumore (dita che strisciano)
+  let out=multiPitch(M,T,R);if(!out.length||out.expl<0.15+S.nf*0.025)return{m:null}; // rumore (dita che strisciano)
   {const q=out.map(o=>o.m).sort((a,b)=>a-b);let adj=0;for(let i=1;i<q.length;i++)if(q[i]-q[i-1]<=2)adj++;if(adj>=2)return{m:null}}
   const ms=[...new Set(out.map(o=>o.m))].sort((a,b)=>a-b),pcs=new Set(ms.map(m=>m%12));
-  if(S.mode!=='bi'&&pcs.size>=3&&(S.mode==='chord'||S.mode==='all')){const c=matchChord(out);if(c){const fr=voicing(c.r,c.ty);return{m:vNotes(fr),c:[c.r,c.ty],f:fStr(fr)}}}
+  if(S.mode!=='bi'&&pcs.size>=3&&(S.mode==='chord'||S.chs>=8||ms.length>=(S.chs<=3?5:4)||pcs.size<ms.length||ms[ms.length-1]-ms[0]>=12)){const c=matchChord(out);if(c){const fr=voicing(c.r,c.ty);return{m:vNotes(fr),c:[c.r,c.ty],f:fStr(fr)}}}
   out=out.filter(o=>!out.some(l=>[12,19,24,28,31].includes(o.m-l.m)&&o.s<l.s*0.6)); // armoniche, non note vere
   const top=out.slice().sort((a,b)=>b.s-a.s).slice(0,S.mode==='bi'?3:4).map(o=>o.m).sort((a,b)=>a-b);
   return{m:top.length===1?top[0]:top,out};
@@ -296,9 +298,9 @@ function anAcc(c,A0,n){const A=new Float32Array(A0.length);for(let k=0;k<A.lengt
   if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D,A,c.ref)} // solo le note NUOVE (arpeggi)
   else r=analyzePoly(A);
   if(c.ref&&S.mode!=='single'&&S.mode!=='bi'&&!r.c){const nn=r.m==null?0:NOTES(r).length; // pennata: accordo intero, privilegiando le note appena suonate
-    if(nn>=2||(nn===0&&(c.str||0)>=1.8)){const N=new Set(NOTES(r).map(m=>m%12)),oA=multiPitch(A.slice());
+    if(nn>=2||(nn===0&&(c.str||0)>=2.5&&S.mode==='chord')){const N=new Set(NOTES(r).map(m=>m%12)),oA=multiPitch(A.slice());
       if(oA.length){const ch=matchChord(N.size?oA.map(o=>({m:o.m,s:o.s*(N.has(o.m%12)?2:0.4)})):oA);if(ch&&(!N.size||N.has(ch.r))){const fr=voicing(ch.r,ch.ty);return{m:vNotes(fr),c:[ch.r,ch.ty],f:fStr(fr)}}}}}
-  const vote=v=>{if(!v||!c.ny)return null;let bm=null,bc=0;for(const k in v)if(v[k]>bc){bc=v[k];bm=+k}return bc>=0.6*c.ny&&bc>=2?bm:null};
+  const vote=v=>{if(!v||!c.ny)return null;let bm=null,bc=0;for(const k in v)if(v[k]>bc){bc=v[k];bm=+k}return bc>=0.5*c.ny&&bc>=2?bm:null};
   const ms=vote(c.ys);if(ms!=null)return{m:ms}; // suono chiaramente monofonico
   if(r.c)return r; // accordo
   if(c.yv&&c.ny){let bm=null,bc=0;for(const k in c.yv)if(c.yv[k]>bc){bc=c.yv[k];bm=+k}if(bc>=0.6*c.ny&&bc>=2)return{m:bm}} // suono monofonico: una sola nota
@@ -320,7 +322,7 @@ function closeEv(e){if(rec.cur.pend)finalize(rec.cur);const c=rec.cur;if(e>c.s)r
 function segPoly(r,hp){
   const t=clock();let c=rec.cur,snd=c.m!==null;
   grabSpec();rec.ring=rec.ring||[];let fx=0;{const pv=rec.ring[rec.ring.length-1];if(pv){const df=ac.sampleRate/an.fftSize,k0=Math.floor(70/df),k1=Math.floor(2500/df);let a=0,b=0;for(let k=k0;k<k1;k++){a+=Math.max(0,lin[k]-pv[k]);b+=pv[k]}fx=a/(b+1e-9)}}rec.ring.push(lin.slice());if(rec.ring.length>3)rec.ring.shift(); // fx = quanto suono nuovo è arrivato
-  if(c.pend){const dt=t-c.s;if(dt>=60){const yf=yin(mtof(AMIN)*0.85,mtof(AMAX)*1.25);if(dt>=130){c.ny=(c.ny||0)+1;}if(dt>=130&&yf>0&&YCL<0.08){const n=Math.round(69+12*Math.log2(yf/S.a4));if(ALLOWED.has(n)){c.yv=c.yv||{};c.yv[n]=(c.yv[n]||0)+1;if(YCL<0.03){c.ys=c.ys||{};c.ys[n]=(c.ys[n]||0)+1}}}const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if((c.nE===1&&!c.prov)||(c.nM===1&&!c.prov2)){if(c.nM)c.prov2=1;c.prov=c.nM?anAcc(c,c.accM,c.nM):anAcc(c,c.accE,c.nE);if(c.prov.m!=null){showLive(c.prov);kick()}}if(dt>=330){let w=false;if(dt<480&&S.mode!=='single'&&S.mode!=='bi'&&c.nM){const r=anAcc(c,c.accM,c.nM);w=Array.isArray(r.m)&&!r.c}if(!w){finalize(c);c=rec.cur;snd=c.m!==null}}}
+  if(c.pend){const dt=t-c.s;if(dt>=60){const yf=yin(mtof(AMIN)*0.85,mtof(AMAX)*1.25);if(dt>=130){c.ny=(c.ny||0)+1;}if(dt>=130&&yf>0&&YCL<0.08){const n=Math.round(69+12*Math.log2(yf/S.a4));if(ALLOWED.has(n)){c.yv=c.yv||{};c.yv[n]=(c.yv[n]||0)+1;if(YCL<0.05){c.ys=c.ys||{};c.ys[n]=(c.ys[n]||0)+1}}}const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if((c.nE===1&&!c.prov)||(c.nM===1&&!c.prov2)){if(c.nM)c.prov2=1;c.prov=c.nM?anAcc(c,c.accM,c.nM):anAcc(c,c.accE,c.nE);if(c.prov.m!=null){showLive(c.prov);kick()}}if(dt>=330){let w=false;if(dt<480&&S.mode!=='single'&&S.mode!=='bi'&&c.nM){const r=anAcc(c,c.accM,c.nM);w=Array.isArray(r.m)&&!r.c}if(!w){finalize(c);c=rec.cur;snd=c.m!==null}}}
   if(r<(snd?G*0.3:G)){rec.sil++;if(rec.sil>=4&&snd){const s=Math.max(c.s,t-75);closeEv(s);rec.cur={m:null,s}}return}
   rec.sil=0;
   if((c.m===null&&!c.dead)||(!(c.pend&&t-c.s<350&&c.prov&&Array.isArray(c.prov.m))&&t-c.s>110&&((r>rec.valley*2.2&&r>G*2)||(hp>rec.hv*2.4&&r>G*1.5)||(fx>0.42&&t-c.s>200&&r>G*1.5)))){const s=Math.max(c.s,t-10),str=Math.max(r/Math.max(rec.valley,1e-6),fx>0.42?2:0);closeEv(s);rec.cur=newPend(s);rec.cur.str=str;rec.valley=r;rec.hv=hp;return}
@@ -343,7 +345,7 @@ function seg(obs,r){
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
-  {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,0.45*g*u)&&i>0; // troppo brevi = rumore
+  {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,(0.25+S.nf*0.05)*g*u)&&i>0; // troppo brevi = rumore
     if(sh){o.cut=1;return}const l=o[o.length-1];if(o.cut&&l&&e.m!==null&&JSON.stringify(l.m)===JSON.stringify(e.m)){o[o.length-1]=Object.assign({},l,{e:e.e});o.cut=0;return}o.cut=0;o.push(e)});ev=o}
   // piccoli stacchi tra due note (< metà battito) = nota tenuta, non pausa
   {const b0=240000/sc.bpm/4;ev=ev.filter((e,i)=>!(e.m===null&&i>0&&i<ev.length-1&&ev[i-1].m!==null&&ev[i+1].m!==null&&e.e-e.s<0.8*(ev[i-1].e-ev[i-1].s)&&e.e-e.s<0.9*b0))}
@@ -380,7 +382,7 @@ function pauseRec(){
   drawCtrl();
 }
 function stopRec(){if(!rec.on)return;
-  if(rec.imp){const x=rec.imp;rec.imp=null;try{x.src.onended=null;x.src.stop()}catch(e){}clearInterval(x.iv);S.countIn=x.ci;S.click=x.ck;if(micSrc)micSrc.connect(an)}
+  if(rec.imp){const x=rec.imp;rec.imp=null;try{x.src.onended=null;x.src.stop()}catch(e){}clearInterval(x.iv);S.countIn=x.ci;S.click=x.ck;if(micOut)micOut.connect(an)}
   if(!rec.counting){if(!rec.paused)rec.acc+=performance.now()-rec.t0;rec.paused=true;if(rec.cur.pend)finalize(rec.cur);rec.ev.push({m:rec.cur.m,s:rec.cur.s,e:rec.acc,c:rec.cur.c,f:rec.cur.f})}
   const ms=rec.counting?[]:toMeasures(rec.ev);rec.on=false;rec.counting=false;
   if(ms.length){sc.measures=merged(ms);save();toast(rec.at==null?'Aggiunte '+ms.length+' battute':'Battute sovrascritte dalla '+(rec.at+1))}else toast('Nessuna nota rilevata');
@@ -701,7 +703,7 @@ async function importAudio(file){
   let ab=null;try{ab=await ac.decodeAudioData(await file.arrayBuffer())}catch(e){}
   if(!ab)return toast('Formato audio non supportato da questo telefono');
   if(!an){an=ac.createAnalyser();an.fftSize=8192;an.smoothingTimeConstant=0;buf=new Float32Array(8192);fbuf=new Float32Array(an.frequencyBinCount);lin=new Float32Array(an.frequencyBinCount);loop=setInterval(analyze,20)}
-  if(micSrc)micSrc.disconnect();
+  if(micOut)micOut.disconnect();
   const ci=S.countIn,ck=S.click;S.countIn=false;S.click=false;
   await startRec(true);
   const src=ac.createBufferSource();src.buffer=ab;src.connect(an);const t0=ac.currentTime;src.start();
@@ -800,7 +802,14 @@ function drawSet(){
   <div class="row"><div>Armatura di chiave</div>${keySel()}</div>
   <div class="row"><div>Tempo</div>${seg2('beats',[[2,'2/4'],[3,'3/4'],[4,'4/4']],sc.beats)}</div>
   <div class="row"><div>Nota più breve<small>Precisione delle durate</small></div>${GRIDSEG()}</div>
-  <div class="row"><div>Sensibilità microfono<small>Aumenta se non sente le note, diminuisci se c'è rumore</small></div><input type="range" id="sens" min="1" max="10" value="${S.sens}"></div>
+  <div class="row" style="border:0;padding-bottom:0"><b style="font-size:17px">Microfono</b></div>
+  <div class="row"><div>Sensibilità<small>Aumenta se non sente le note, diminuisci se c'è rumore · ${S.sens}</small></div><input type="range" id="sens" min="1" max="10" value="${S.sens}"></div>
+  <div class="row"><div>Guadagno<small>Volume d'ingresso del microfono · ${Math.round(S.mgain*100)}%</small></div><input type="range" id="mgain" min="25" max="400" step="5" value="${Math.round(S.mgain*100)}"></div>
+  <div class="row"><div>Taglio dei bassi<small>Elimina rimbombi e ronzii sotto · ${S.mlo} Hz</small></div><input type="range" id="mlo" min="20" max="300" step="5" value="${S.mlo}"></div>
+  <div class="row"><div>Taglio degli acuti<small>Elimina fruscii sopra · ${S.mhi} Hz</small></div><input type="range" id="mhi" min="1500" max="12000" step="100" value="${S.mhi}"></div>
+  <div class="row"><div>Filtro rumori<small>Più alto = ignora più rumori e note sfiorate · ${S.nf}</small></div><input type="range" id="nf" min="1" max="10" value="${S.nf}"></div>
+  <div class="row"><div>Sensibilità accordi<small>Più basso = meno accordi, più note singole e bicordi · ${S.chs}</small></div><input type="range" id="chs" min="1" max="10" value="${S.chs}"></div>
+  <div class="row"><button class="btn sm" data-reseq="1">Ripristina valori del microfono</button></div>
   <div class="row"><div>LA di riferimento (Hz)</div><input type="number" id="a4" min="415" max="466" value="${S.a4}" style="width:80px"></div>
   <div class="row"><div>Metronomo sonoro</div>${tg('click',S.click)}</div>
   <div class="row"><div>Volume metronomo<small>${S.vol}%</small></div><input type="range" id="vol" min="0" max="100" value="${S.vol}"></div>
@@ -810,6 +819,7 @@ function drawSet(){
   <div class="row" style="border:0"><div>Tema</div><div class="sw">${Object.keys(THEMES).map(t=>`<button data-th="${t}" class="${S.theme===t?'on':''}" title="${t}" style="background:linear-gradient(135deg,${THEMES[t][0]},${THEMES[t][1]})"></button>`).join('')}</div></div>`;
 }
 $('#pSet').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;
+  if(b.dataset.reseq){Object.assign(S,{sens:5,mgain:1,mlo:60,mhi:6000,nf:4,chs:5});applyEQ();save();drawSet();toast('Valori del microfono ripristinati');return}
   if(b.dataset.close!==undefined)return $('#shSet').classList.remove('open');
   if(b.dataset.k&&!setKV(b.dataset.k,b.dataset.v))return;
   if(b.dataset.t)S[b.dataset.t]=!S[b.dataset.t];
@@ -821,7 +831,7 @@ $('#pSet').onchange=$('#pSet').oninput=ev=>{const t=ev.target;if(!t.id)return;
   if(t.id==='fMax')S.fMax=+t.value;
   if(t.id==='bpm'){if(rec.on)return;sc.bpm=+t.value;t.previousElementSibling.querySelector('small').textContent='♩ = '+sc.bpm;save();render();return}
   if(t.id==='vol'){S.vol=+t.value;t.previousElementSibling.querySelector('small').textContent=S.vol+'%';save();drawMet();return}
-  if(t.id==='sens'){S.sens=+t.value;save();return}
+  if(['sens','mgain','mlo','mhi','nf','chs'].includes(t.id)){S[t.id]=t.id==='mgain'?+t.value/100:+t.value;applyEQ();save();const sm=t.previousElementSibling.querySelector('small');if(sm)sm.textContent=sm.textContent.replace(/·.*$/,'· '+(t.id==='mgain'?t.value+'%':t.id==='mlo'||t.id==='mhi'?t.value+' Hz':t.value));return}
   if(t.id==='a4'){const v=+t.value;if(v>=415&&v<=466)S.a4=v;save();return}
   apply()};
 function apply(){calcAllowed();drawQuick();drawMet();save();drawSet();drawCtrl();if(sel)drawEd();render()}
