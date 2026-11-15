@@ -339,13 +339,18 @@ function seg(obs,r){
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
-  ev=ev.filter((e,i)=>!(e.m!==null&&!e.live&&e.e-e.s<Math.max(50,0.45*g*u)&&i>0)); // troppo brevi = rumore
+  {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,0.45*g*u)&&i>0; // troppo brevi = rumore
+    if(sh){o.cut=1;return}const l=o[o.length-1];if(o.cut&&l&&e.m!==null&&JSON.stringify(l.m)===JSON.stringify(e.m)){o[o.length-1]=Object.assign({},l,{e:e.e});o.cut=0;return}o.cut=0;o.push(e)});ev=o}
+  // piccoli stacchi tra due note (< metà battito) = nota tenuta, non pausa
+  {const b0=240000/sc.bpm/4;ev=ev.filter((e,i)=>!(e.m===null&&i>0&&i<ev.length-1&&ev[i-1].m!==null&&ev[i+1].m!==null&&e.e-e.s<0.8*(ev[i-1].e-ev[i-1].s)&&e.e-e.s<0.9*b0))}
   // allineamento al tempo: ritardo medio sugli attacchi + aggancio preferendo battiti, poi crome, poi semicrome
   const bt=4*u,devs=ev.filter(e=>e.m!==null).map(e=>{const b=e.s/bt;return b-Math.round(b)}).filter(d=>Math.abs(d)<0.3).sort((a,b)=>a-b);
-  const off=devs.length>=2?devs[devs.length>>1]:0,LV=[[1,0],[0.5,0.08],[0.25,0.16],[0.125,0.22],[0.0625,0.28]].filter(l=>l[0]>=g/4);
+  const off=devs.length>=2?devs[devs.length>>1]:0,LV=[[1,0],[0.5,0.12],[0.25,0.28],[0.125,0.36],[0.0625,0.42]].filter(l=>l[0]>=g/4);
   const snap=x=>{const b=Math.max(0,x/bt-off);let bc=0,bs=1e9;for(const[l,pn]of LV){const c=Math.round(b/l)*l,sc2=Math.abs(b-c)+pn;if(sc2<bs){bs=sc2;bc=c}}return bc*4};
   const Q=ev.map(e=>snap(e.s));for(let i=0;i<Q.length-1;i++)if(ev[i].c&&ev[i+1].m===null){const b=Math.max(Q[i]+4,Math.round(Q[i+1]/4)*4);if(i+2>=Q.length||b<Q[i+2])Q[i+1]=b} // accordo: durata a quarti
-  for(let i=1;i<Q.length;i++)if(Q[i]<=Q[i-1]&&ev[i].m!==null&&ev[i-1].m!==null&&ev[i].e-ev[i].s>=g*u*0.6)Q[i]=Q[i-1]+g; // due note diverse non sullo stesso punto
+  for(let i=1;i<Q.length;i++)if(Q[i]<=Q[i-1]&&ev[i-1].m!==null&&ev[i-1].e-ev[i-1].s>=g*u*0.6&&(ev[i].m===null||ev[i].e-ev[i].s>=g*u*0.6)){const f=Math.max(g,Math.round((ev[i].s-ev[i-1].s)/u/g)*g);Q[i]=Q[i-1]+(i+1<Q.length&&Q[i-1]+f>=Q[i+1]?g:f)} // nessuna nota sparisce
+  for(let i=0;i<Q.length-1;i++)if(ev[i].m!==null&&ev[i+1].m===null){const dq=Q[i+1]-Q[i],lim=i+2<Q.length?Q[i+2]:Infinity; // durata "pulita": semiminima, minima, semibreve, croma
+    for(const v of [4,8,16,2])if(v>=g&&Math.abs(dq-v)<=Math.max(0.25*v,1)+1e-9&&Q[i]+v<=lim+1e-9){Q[i+1]=Q[i]+v;break}} // due note diverse non sullo stesso punto
   let seq=[];
   ev.forEach((e,i)=>{const p=Q[i];let n=i<ev.length-1?Q[i+1]:Math.max(p,snap(e.e));if(e.live&&e.m!==null&&n<=p)n=p+g;if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
@@ -370,7 +375,7 @@ function pauseRec(){
   else{rec.t0=performance.now();rec.paused=false;rec.beat=-1;status('● Registrazione…')}
   drawCtrl();
 }
-function stopRec(){
+function stopRec(){if(!rec.on)return;
   if(rec.imp){const x=rec.imp;rec.imp=null;try{x.src.onended=null;x.src.stop()}catch(e){}clearInterval(x.iv);S.countIn=x.ci;S.click=x.ck;if(micSrc)micSrc.connect(an)}
   if(!rec.counting){if(!rec.paused)rec.acc+=performance.now()-rec.t0;rec.paused=true;if(rec.cur.pend)finalize(rec.cur);rec.ev.push({m:rec.cur.m,s:rec.cur.s,e:rec.acc,c:rec.cur.c,f:rec.cur.f})}
   const ms=rec.counting?[]:toMeasures(rec.ev);rec.on=false;rec.counting=false;
@@ -507,7 +512,7 @@ function drawNote(p,x,col){
   const st=p.st,n=st.length,lo=Math.min(...st),hi=Math.max(...st);let s='';
   for(let l=-2;l>=lo;l-=2)s+=ln(x-10,yS(l),x+10,yS(l),1.2);
   for(let l=10;l<=hi;l+=2)s+=ln(x-10,yS(l),x+10,yS(l),1.2);
-  const up=(lo+hi)/2<4,off=st.map(()=>0);p.up=up;
+  const up=p.bm?p.bm.up:(lo+hi)/2<4,off=st.map(()=>0);p.up=up;
   if(up){for(let i=1;i<n;i++)if(st[i]-st[i-1]<=1&&!off[i-1])off[i]=11}else{for(let i=n-2;i>=0;i--)if(st[i+1]-st[i]<=1&&!off[i+1])off[i]=-11}
   const lft=Math.min(0,...off),rgt=Math.max(0,...off);let ai=0;
   for(let i=n-1;i>=0;i--)if(p.acc[i]){s+=`<text x="${x-19+lft-(ai%2)*9}" y="${yS(st[i])+5}" font-size="16" fill="${col}">${p.acc[i]}</text>`;ai++}
@@ -515,9 +520,9 @@ function drawNote(p,x,col){
   st.forEach((v,i)=>{const hx=x+off[i],y=yS(v);
     s+=`<ellipse cx="${hx}" cy="${y}" rx="${p.v>=16?7:6.2}" ry="4.5" transform="rotate(${p.v>=16?0:-20} ${hx} ${y})" fill="${hol?'none':col}" stroke="${col}" stroke-width="${hol?1.9:1}"/>`;
     if(p.v===12||p.v===6||p.v===3||p.v===1.5)s+=`<circle cx="${x+rgt+11}" cy="${v%2===0?y-2.5:y}" r="1.8" fill="${col}"/>`});
-  if(p.v<16){const sx=up?x+5.6:x-5.6,y0=up?yS(lo):yS(hi),ey=up?yS(hi)-(p.v===0.5?40:p.v===0.25?46:34):yS(lo)+(p.v===0.5?40:p.v===0.25?46:34);
+  if(p.v<16){const sx=up?x+5.6:x-5.6,y0=up?yS(lo):yS(hi),ey=p.bm?p.bm.y(sx):up?yS(hi)-(p.v===0.5?40:p.v===0.25?46:34):yS(lo)+(p.v===0.5?40:p.v===0.25?46:34);
     s+=`<line x1="${sx}" y1="${y0}" x2="${sx}" y2="${ey}" stroke="${col}" stroke-width="1.4"/>`;
-    const fl=(p.v===2||p.v===3)?1:(p.v===1||p.v===1.5)?2:p.v===0.5?3:p.v===0.25?4:0;
+    const fl=p.bm?0:(p.v===2||p.v===3)?1:(p.v===1||p.v===1.5)?2:p.v===0.5?3:p.v===0.25?4:0;
     for(let f=0;f<fl;f++){const fy=ey+(up?f*7:-f*7);s+=`<path d="M${sx} ${fy} q1 ${up?7:-7} 8 ${up?11:-11} q3 ${up?4:-4} 1 ${up?10:-10}" fill="none" stroke="${col}" stroke-width="1.8"/>`}}
   if(p.first){
     if(p.c){s+=`<text x="${x}" y="13" text-anchor="middle" font-size="12.5" font-weight="800" fill="var(--accent)">${chName(p.c)}</text>`;
@@ -572,8 +577,23 @@ function render(opt){opt=opt||{};
       const km=opt.host?((W-4-row.pre)/PR)/ly.w:k,mw=ly.w*km,mi=ly.mi,isM=!opt.host&&((sel&&sel.mi===mi)||(rec.on&&rec.at===mi)||(PB.on&&PB.hl&&+PB.hl.split(':')[0]===mi));
       s+=`<rect class="mh" data-mi="${mi}" x="${x+1}" y="6" width="${mw-2}" height="${RH-8}" rx="12" fill="${isM?'var(--accent)':(ly.over&&!opt.host?'#ff3b30':'transparent')}" fill-opacity="${isM||(ly.over&&!opt.host)?.12:0}"/>`;
       s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}${BR.has(mi)?' ↵':''}</text>`;
-      let cx=x+8*km;
-      ly.it.forEach(p=>{const pk=p.w*km,nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;
+      let cx=x+8*km,ps=0;
+      ly.it.forEach(p=>{const pk=p.w*km;p.nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;p.ps=ps;ps+=p.v;delete p.bm});
+      // crome/semicrome unite da travi (gruppi dentro lo stesso battito)
+      const grp=[];let cur=[];const flush=()=>{if(cur.length>1)grp.push(cur);cur=[]};
+      ly.it.forEach(p=>{if(p.rest||p.v>3||p.v===4||p.empty){flush();return}const bt=Math.floor(p.ps/4+1e-9);if(cur.length&&Math.floor(cur[0].ps/4+1e-9)!==bt)flush();cur.push(p)});flush();
+      let beams='';
+      grp.forEach(G=>{const ce=G.map(p=>(Math.min(...p.st)+Math.max(...p.st))/2),up=ce.reduce((a,b)=>a+b,0)/ce.length<4,sx=p=>up?p.nx+5.6:p.nx-5.6;
+        const ideal=G.map(p=>{const fl=p.v<=0.25?4:p.v<=0.5?3:p.v<=1.5?2:1,ex=(fl-1)*7;return up?yS(Math.max(...p.st))-34-ex:yS(Math.min(...p.st))+34+ex});
+        const x1=sx(G[0]),x2=sx(G[G.length-1]);let y1=ideal[0],y2=ideal[ideal.length-1];const sl=Math.max(-8,Math.min(8,y2-y1));y2=y1+sl;
+        const Ly=x=>x2===x1?y1:y1+(y2-y1)*(x-x1)/(x2-x1);let sh=0;G.forEach((p,i)=>{const d=Ly(sx(p))-ideal[i];sh=up?Math.max(sh,d):Math.min(sh,d)});
+        const Y=x=>Ly(x)-sh;G.forEach(p=>p.bm={up,y:Y});
+        const T=4.5,dir=up?1:-1,poly=(a,b,o)=>`<polygon points="${a},${Y(a)+o} ${b},${Y(b)+o} ${b},${Y(b)+o+T*dir} ${a},${Y(a)+o+T*dir}" fill="currentColor"/>`;
+        beams+=poly(x1,x2,0);
+        [[1.5,1],[0.5,2],[0.25,3]].forEach(([lim,lv])=>{const o=lv*7*dir;G.forEach((p,i)=>{if(p.v>lim)return;const n=G[i+1],pr=G[i-1];
+          if(n&&n.v<=lim)beams+=poly(sx(p),sx(n),o);else if(!(pr&&pr.v<=lim))beams+=n?poly(sx(p),sx(p)+9,o):poly(sx(p)-9,sx(p),o)})})});
+      s+=beams;
+      ly.it.forEach(p=>{const nx=p.nx;
         const isS=(isM&&sel&&sel.ei===p.ei&&p.ei!==undefined)||(!opt.host&&PB.hl===mi+':'+p.ei),col=isS||p.live?'var(--accent)':'currentColor';
         let g='';
         if(p.rest){g=drawRestFull(p.v,p.empty?x+mw/2:nx,col,p.empty?.35:0);notes.push({rest:true})}
@@ -691,6 +711,34 @@ $('#bPhone').onclick=()=>{S.phone=!S.phone;save();drawPhone();render()};
 function drawMet(){$('#bMet').innerHTML=S.click&&S.vol>0?ico('met')+'Metronomo':ico('metoff')+'Metronomo'}
 $('#bMet').onclick=()=>{S.click=!S.click;if(S.click&&!S.vol)S.vol=60;save();drawMet()};
 const XOPT=()=>({W:Math.round(720/S.pz),perRow:S.xpr,RL:S.xlab,RT:S.xtab});
+function svgToCanvas(src,W,H){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.drawImage(img,0,0);res(c)};img.onerror=rej;img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(src)})}
+function shareFile(bl,fn,type){const f=new File([bl],fn,{type});
+  if(navigator.canShare&&navigator.canShare({files:[f]}))return navigator.share({files:[f],title:sc.name}).catch(()=>dl());dl();
+  function dl(){const a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},3000);toast('File salvato: '+fn)}}
+function makePdf(jpgs,pw,ph){ // PDF A4 con un'immagine JPEG per pagina
+  const enc=new TextEncoder(),parts=[],offs=[];let len=0;const put=x=>{const u=typeof x==='string'?enc.encode(x):x;parts.push(u);len+=u.length};
+  const n=jpgs.length,obj=i=>{offs[i]=len};put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  obj(1);put('1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n');
+  obj(2);put('2 0 obj<</Type/Pages/Count '+n+'/Kids['+jpgs.map((_,i)=>(3+i*3)+' 0 R').join(' ')+']>>endobj\n');
+  jpgs.forEach((j,i)=>{const P=3+i*3,I=P+1,C=P+2,cs='q 595.28 0 0 841.89 0 0 cm /Im0 Do Q';
+    obj(P);put(P+' 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595.28 841.89]/Resources<</XObject<</Im0 '+I+' 0 R>>>>/Contents '+C+' 0 R>>endobj\n');
+    obj(I);put(I+' 0 obj<</Type/XObject/Subtype/Image/Width '+pw+'/Height '+ph+'/ColorSpace/DeviceRGB/BitsPerComponent 8/Filter/DCTDecode/Length '+j.length+'>>stream\n');put(j);put('\nendstream endobj\n');
+    obj(C);put(C+' 0 obj<</Length '+cs.length+'>>stream\n'+cs+'\nendstream endobj\n')});
+  const N=3+n*3,x=len;let t='xref\n0 '+N+'\n0000000000 65535 f \n';for(let i=1;i<N;i++)t+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  put(t+'trailer<</Size '+N+'/Root 1 0 R>>\nstartxref\n'+x+'\n%%EOF');return new Blob(parts,{type:'application/pdf'})}
+async function doPdf(){toast('Creo il PDF…');
+  const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-9999px;top:0;width:720px';document.body.appendChild(tmp);
+  render(Object.assign({host:tmp},XOPT()));const cs=getComputedStyle(document.documentElement),cv=v=>cs.getPropertyValue(v).trim();
+  const PW=1240,PH=1754,M=80,IW=PW-2*M,pages=[[]];let y=M+130;
+  [...tmp.querySelectorAll('svg')].forEach(sv=>{const vb=sv.getAttribute('viewBox').split(' ').map(Number),h=vb[3]*IW/vb[2];if(y+h>PH-M-40&&pages[pages.length-1].length){pages.push([]);y=M}pages[pages.length-1].push({sv,vb,y,h});y+=h});
+  tmp.remove();const jpgs=[];
+  for(let pi=0;pi<pages.length;pi++){let src=`<svg xmlns="http://www.w3.org/2000/svg" width="${PW}" height="${PH}" color="#111" font-family="-apple-system,Roboto,Helvetica,Arial,sans-serif"><rect width="100%" height="100%" fill="#fff"/>`;
+    if(pi===0)src+=`<text x="${PW/2}" y="${M+40}" text-anchor="middle" font-size="42" font-weight="700" fill="#111">${esc(sc.name)}</text><text x="${PW/2}" y="${M+80}" text-anchor="middle" font-size="20" fill="#666">${sc.beats}/4 · ♩ = ${sc.bpm}</text>`;
+    pages[pi].forEach(r=>src+=`<svg x="${M}" y="${r.y}" width="${IW}" height="${r.h}" viewBox="${r.vb.join(' ')}">${r.sv.innerHTML}</svg>`);
+    src+=`<text x="${PW/2}" y="${PH-40}" text-anchor="middle" font-size="16" fill="#888">Copyright © Ignazio Paolicelli · ${pi+1}/${pages.length}</text></svg>`;
+    src=src.replace(/var\((--[a-z0-9]+)\)/g,(m,v)=>cv(v)||'#111');
+    const c=await svgToCanvas(src,PW,PH),bl=await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));jpgs.push(new Uint8Array(await bl.arrayBuffer()))}
+  const fn=(sc.name||'spartito').replace(/[^\w\- àèéìòù]/gi,'_')+'.pdf';shareFile(makePdf(jpgs,PW,PH),fn,'application/pdf');toast('PDF di '+pages.length+(pages.length>1?' pagine':' pagina'))}
 async function doImg(){
   const tmp=document.createElement('div');tmp.style.cssText='position:absolute;left:-9999px;top:0;width:720px';document.body.appendChild(tmp);
   render(Object.assign({host:tmp},XOPT()));const cs=getComputedStyle(document.documentElement),cv=v=>cs.getPropertyValue(v).trim();
@@ -719,7 +767,7 @@ function drawExp(){$('#pExp').innerHTML=`<h2>Esporta <button class="ib" data-clo
 $('#bPrint').onclick=()=>{if(rec.on)return;drawExp();$('#shExp').classList.add('open')};
 $('#pExp').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;
   if(b.dataset.close!==undefined)return $('#shExp').classList.remove('open');
-  if(b.dataset.x==='pdf')return doPrint();if(b.dataset.x==='img')return doImg();
+  if(b.dataset.x==='pdf')return doPdf();if(b.dataset.x==='img')return doImg();
   if(b.dataset.k)S[b.dataset.k]=+b.dataset.v;if(b.dataset.t)S[b.dataset.t]=!S[b.dataset.t];save();drawExp()};
 $('#pExp').onchange=ev=>{if(ev.target.id==='xkey'){sc.key=+ev.target.value;save();drawExp();render()}};
 $('#title').oninput=e=>{sc.name=e.target.value||'Senza titolo';save()};
