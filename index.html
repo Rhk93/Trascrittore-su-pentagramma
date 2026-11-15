@@ -72,6 +72,7 @@ input[type=range]{accent-color:var(--accent);width:140px}
 .li{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:var(--line);margin-bottom:8px;cursor:pointer}
 .li.cur{outline:2px solid var(--accent)}
 .li b{flex:1}
+#fab{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + 18px);z-index:15;display:none;gap:10px}#fab.on{display:flex}#fab button{width:62px;height:62px;border-radius:50%;border:0;font-size:22px;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25);cursor:pointer}#fabP{background:linear-gradient(135deg,var(--accent),var(--accent2))}#fabS{background:#ff3b30}
 #toast{position:fixed;left:50%;top:80px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 16px;border-radius:14px;font-size:14px;z-index:30;opacity:0;transition:.3s;pointer-events:none;max-width:90%}
 #toast.on{opacity:1}
 footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
@@ -102,6 +103,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
       <button class="btn sm" id="bMet"></button>
       <button class="btn sm" id="bPlay">▶ Ascolta</button>
       <button class="btn sm" id="bPrint">⎙ Stampa/PDF</button>
+      <button class="btn sm" id="bClrAll" style="color:#ff3b30">🧹 Svuota tutto</button>
     </div>
     <div class="bar2" id="quick"></div>
     <div class="meta" id="meta"></div>
@@ -113,7 +115,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 
 <div id="editor">
   <div class="er"><span id="einfo"></span>
-    <button class="ch" data-a="clr">Svuota</button><button class="ch" data-a="clrAll" style="color:#ff3b30">🧹 Svuota tutto</button><button class="ch" data-a="recHere" style="background:#ff3b30;color:#fff">● Registra qui</button><button class="ch" data-a="insB">＋ Prima</button><button class="ch" data-a="insA">＋ Dopo</button>
+    <button class="ch" data-a="clr">Svuota</button><button class="ch" data-a="recHere" style="background:#ff3b30;color:#fff">● Registra qui</button><button class="ch" data-a="insB">＋ Prima</button><button class="ch" data-a="insA">＋ Dopo</button>
     <button class="ch" data-a="br" id="bBr">↵ A capo dopo</button><button class="ch" data-a="delM" style="color:#ff3b30">Elimina battuta</button>
     <button class="ch" data-a="close">✕</button></div>
   <div class="er" id="eDur"></div>
@@ -123,6 +125,7 @@ footer{text-align:center;font-size:12px;color:var(--mut);padding:10px}
 
 <div class="sheet" id="shSet"><div class="panel" id="pSet"></div></div>
 <div class="sheet" id="shLib"><div class="panel" id="pLib"></div></div>
+<div id="fab"><button id="fabP" title="Pausa">❚❚</button><button id="fabS" title="Fine">■</button></div>
 <div id="toast"></div>
 
 <script>
@@ -258,19 +261,21 @@ function showLive(res){const b=$('#bigNote');let t='—',h='';
   else if(res.m!=null){t=nm(res.m,1);const q=pos(res.m);h=q?q.s+'ª corda, tasto '+q.f:''}
   b.textContent=t;b.style.fontSize=t.length>8?'22px':t.length>4?'30px':'';$('#hz').textContent=h}
 function newPend(s){return{m:-1,s,pend:true,ref:rec.ring&&rec.ring.length?rec.ring[0]:null,accE:new Float32Array(lin.length),accM:new Float32Array(lin.length),nE:0,nM:0}}
+function anAcc(c,A0,n){const A=new Float32Array(A0.length);for(let k=0;k<A.length;k++)A[k]=A0[k]/n;
+  let r={m:null};
+  if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D)} // solo le note NUOVE (arpeggi)
+  if(r.m==null){r=analyzePoly(A);if(Array.isArray(r.m)&&c.ref)r={m:r.m[0]}}
+  return r}
 function finalize(c){const n=c.nM||c.nE,A=c.nM?c.accM:c.accE;c.pend=false;
   if(!n){c.m=null;c.dead=true}else{
-    for(let k=0;k<A.length;k++)A[k]/=n;
-    let r={m:null};
-    if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D)} // solo le note NUOVE (arpeggi)
-    if(r.m==null){r=analyzePoly(A);if(Array.isArray(r.m)&&c.ref){r={m:r.m[0]}}}
+    const r=anAcc(c,A,n);
     c.m=r.m;c.c=r.c;c.f=r.f;if(c.m==null)c.dead=true;else showLive(r)}
   c.accE=c.accM=c.ref=null}
 function closeEv(e){const c=rec.cur;if(c.pend)finalize(c);if(e>c.s)rec.ev.push({m:c.m,s:c.s,e,c:c.c,f:c.f})}
 function segPoly(r,hp){
   const t=clock(),c=rec.cur,snd=c.m!==null;
   grabSpec();rec.ring=rec.ring||[];rec.ring.push(lin.slice());if(rec.ring.length>3)rec.ring.shift();
-  if(c.pend){const dt=t-c.s;if(dt>=60){const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if(dt>=330)finalize(c)}
+  if(c.pend){const dt=t-c.s;if(dt>=60){const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if(dt>=130&&!c.prov&&c.nE){c.prov=anAcc(c,c.accE,c.nE);if(c.prov.m!=null)showLive(c.prov)}if(dt>=330)finalize(c)}
   if(r<(snd?G*0.3:G)){rec.sil++;if(rec.sil>=4&&snd){const s=Math.max(c.s,t-75);closeEv(s);rec.cur={m:null,s}}return}
   rec.sil=0;
   if((c.m===null&&!c.dead)||(t-c.s>110&&((r>rec.valley*2.2&&r>G*2)||(hp>rec.hv*1.9&&r>G)))){const s=Math.max(c.s,t-10);closeEv(s);rec.cur=newPend(s);rec.valley=r;rec.hv=hp;return}
@@ -293,15 +298,15 @@ function seg(obs,r){
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
   const q=x=>Math.round(x/u/g)*g;let seq=[];
-  ev.forEach((e,i)=>{const p=q(e.s),n=i<ev.length-1?q(ev[i+1].s):q(e.e);if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f})}});
+  ev.forEach((e,i)=>{const p=q(e.s),n=i<ev.length-1?q(ev[i+1].s):q(e.e);if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
   if(!seq.some(x=>x.m!==null))return[];
   const ms=[];let cur=[],fill=0;
-  for(const x of seq){let d=x.d;while(d>0){const k=Math.min(d,L-fill);cur.push(x.m===null?{m:null,d:k}:Object.assign({m:x.m,d:k,t:d-k>0},x.c&&d===x.d?{c:x.c,f:x.f}:{}));fill+=k;d-=k;if(fill===L){ms.push(cur);cur=[];fill=0}}}
+  for(const x of seq){let d=x.d;while(d>0){const k=Math.min(d,L-fill);cur.push(x.m===null?{m:null,d:k}:Object.assign({m:x.m,d:k,t:d-k>0},x.c&&d===x.d?{c:x.c,f:x.f}:{},x.live?{live:1}:{}));fill+=k;d-=k;if(fill===L){ms.push(cur);cur=[];fill=0}}}
   if(cur.length){cur.push({m:null,d:L-fill});ms.push(cur)}
   return ms;
 }
-const takeMs=()=>toMeasures(rec.cur?rec.ev.concat([{m:rec.cur.pend?null:rec.cur.m,s:rec.cur.s,e:clock(),c:rec.cur.c,f:rec.cur.f}]):rec.ev);
+const takeMs=()=>toMeasures(rec.cur?rec.ev.concat([{m:rec.cur.pend?(rec.cur.prov?rec.cur.prov.m:null):rec.cur.m,s:rec.cur.s,e:clock(),c:rec.cur.pend&&rec.cur.prov?rec.cur.prov.c:rec.cur.c,live:true}]):rec.ev);
 const merged=tk=>{if(rec.at==null)return trimEmpty(sc.measures).concat(tk);const a=sc.measures.slice();a.splice(rec.at,Math.min(tk.length,a.length-rec.at),...tk);return a};
 const trimEmpty=a=>{a=a.slice();while(a.length&&!a[a.length-1].length)a.pop();return a};
 async function startRec(){
@@ -341,6 +346,7 @@ function drawCtrl(){
   const c=$('#ctrl');
   if(!rec.on)c.innerHTML='<button class="btn pri" id="bRec">● Registra'+(sel?' sulla battuta '+(sel.mi+1):'')+'</button>';
   else c.innerHTML='<button class="btn" id="bPause">'+(rec.paused?'▶ Riprendi':'❚❚ Pausa')+'</button><button class="btn red" id="bStop">■ Fine</button>';
+  $('#fab').classList.toggle('on',rec.on);$('#fabP').textContent=rec.paused?'▶':'❚❚';
   const b=$('#bRec');if(b)b.onclick=startRec;
   if($('#bPause')){$('#bPause').onclick=pauseRec;$('#bStop').onclick=stopRec}
   let h='';for(let i=0;i<sc.beats;i++){const x=14+i*34;h+=`<g id="bn${i}" fill="currentColor"><ellipse cx="${x}" cy="48" rx="5.6" ry="4" transform="rotate(-20 ${x} 48)"/><rect x="${x+4.2}" y="26" width="1.6" height="22"/></g>`}
@@ -456,7 +462,7 @@ function render(){
   const lays=meas.map((ms,mi)=>{
     const it=[];
     if(!ms.length)it.push({rest:true,v:16,empty:true,w:60});
-    else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null),ns=NOTES(e).slice().sort((a,b)=>a-b),cont=prevT;prevT=!!e.t&&ns.length>0;ps.forEach((v,pi)=>it.push({ns,rest:!ns.length,v,ei,first:pi===0&&!cont,c:e.c,f:e.f,tie:ns.length>0&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
+    else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null),ns=NOTES(e).slice().sort((a,b)=>a-b),cont=prevT;prevT=!!e.t&&ns.length>0;ps.forEach((v,pi)=>it.push({ns,live:e.live,rest:!ns.length,v,ei,first:pi===0&&!cont,c:e.c,f:e.f,tie:ns.length>0&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
     const acc={};
     it.forEach(p=>{p.lines=1;if(p.rest)return;p.st=[];p.acc=[];let na=0;
       p.ns.forEach(m=>{const wm=m+12,dk=diat(wm),sh=SH[wm%12];p.st.push(dk-30);let a='';
@@ -482,7 +488,7 @@ function render(){
       s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}${BR.has(mi)?' ↵':''}</text>`;
       let cx=x+8*k;
       ly.it.forEach(p=>{const pk=p.w*k,nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;
-        const isS=isM&&sel.ei===p.ei&&p.ei!==undefined,col=isS?'var(--accent)':'currentColor';
+        const isS=isM&&sel.ei===p.ei&&p.ei!==undefined,col=isS||p.live?'var(--accent)':'currentColor';
         let g='';
         if(p.rest){g=drawRestFull(p.v,p.empty?x+mw/2:nx,col,p.empty?.35:0);notes.push({rest:true})}
         else{g=drawNote(p,nx,col);notes.push({x:nx,ys:p.st.map(yS),ri,tie:p.tie,up:p.up})}
@@ -554,6 +560,8 @@ $('#score').onclick=ev=>{if(rec.on)return;const g=ev.target.closest('[data-ei]')
 $('#mPlus').onclick=()=>{if(rec.on)return;sc.measures.push([]);save();render()};
 $('#mMinus').onclick=()=>{if(rec.on||!sc.measures.length)return;sc.measures.pop();if(sel&&sel.mi>=sc.measures.length)closeEd();save();render()};
 $('#bPlay').onclick=play;
+$('#bClrAll').onclick=()=>clrAll();
+$('#fabP').onclick=()=>{if(rec.on)pauseRec()};$('#fabS').onclick=()=>{if(rec.on)stopRec()};
 function clrAll(){if(rec.on)return toast('Termina prima la registrazione');if(!confirm('Svuotare tutte le battute?'))return;stopPlay();sc.measures=sc.measures.map(()=>[]);if(!sc.measures.length)sc.measures=[[],[],[],[]];sel=null;$('#editor').classList.remove('open');save();drawCtrl();render();toast('Tutte le battute svuotate')}
 function drawMet(){$('#bMet').textContent=S.click&&S.vol>0?'🔔 Metronomo':'🔕 Metronomo'}
 $('#bMet').onclick=()=>{S.click=!S.click;if(S.click&&!S.vol)S.vol=60;save();drawMet()};
@@ -620,7 +628,7 @@ $('#bLib').onclick=()=>{drawLib();$('#shLib').classList.add('open')};
 document.querySelectorAll('.sheet').forEach(s=>s.onclick=e=>{if(e.target===s)s.classList.remove('open')});
 /* ---------- INIT ---------- */
 document.documentElement.dataset.theme=S.theme;calcAllowed();drawMet();drawQuick();load();
-setInterval(()=>{if(rec.on&&!rec.paused&&!rec.counting)render()},350);
+setInterval(()=>{if(rec.on&&!rec.paused&&!rec.counting)render()},150);
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(render,150)});
 </script>
 </body>
