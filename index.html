@@ -257,7 +257,7 @@ function multiPitch(M,T,R){
     if(best<0)break;
     for(let g=0;g<2&&ALLOWED.has(best-12)&&!used.has(best-12);g++){const As=harm(best-12),od=(As[0]||0)+(As[2]||0)+(As[4]||0),ev=(As[1]||0)+(As[3]||0)+(As[5]||0);if(od>0&&((As[0]||0)>0.3*ev||(As[2]||0)>0.3*ev)){best-=12;bA=As}else break} // errore d'ottava
     if(it===0)first=bs;else if(bs<first*0.2)break;
-    const rise=()=>{if(!R)return true;const k=Math.round(mtof(best)/df);let a=0,b=0;for(let j=k-1;j<=k+1;j++){a=Math.max(a,M0[j]);b=Math.max(b,R[j])}return a>=b*1.2};
+    const rise=()=>{if(!R)return true;const k=Math.round(mtof(best)/df);let a=0,b=0;for(let j=k-1;j<=k+1;j++){a=Math.max(a,M0[j]);b=Math.max(b,R[j])}return a>=b*1.5};
     used.add(best);if(tonal(best)>=8&&rise())out.push({m:best,s:bs}); // scarta i rumori (non intonati)
     const f=mtof(best);
     bA.forEach((a,h)=>{const sm=h===0?a:Math.min(a,(bA[h-1]+a+(bA[h+1]||0))/3);const[lo,hi]=win(f*(h+1));for(let k=lo-1;k<=hi+1;k++)M[k]=Math.max(0,M[k]-sm)});
@@ -266,7 +266,7 @@ function multiPitch(M,T,R){
   return out;
 }
 function matchChord(out){
-  const w=new Array(12).fill(0);let tot=0;out.forEach(n=>{const v=n.s*(n.m>=64?0.5:1);w[n.m%12]+=v;tot+=v}); // note acute contano meno (possibili armoniche)
+  const w=new Array(12).fill(0);let tot=0;out.forEach(n=>{let v=n.s*(n.m>=64?0.5:1);if(out.some(l=>[19,28,31,34].includes(n.m-l.m)))v*=0.3;w[n.m%12]+=v;tot+=v}); // armoniche di note più gravi contano poco // note acute contano meno (possibili armoniche)
   const p=w.map(x=>x/tot),bass=out.reduce((a,b)=>a.m<b.m?a:b).m%12;let best=null;
   for(let r=0;r<12;r++)for(const ty in TYPES){const iv=TYPES[ty][0],tones=iv.map(i=>(r+i)%12);let inW=0,miss=0,outW=0;
     if(iv.length>3&&p[tones[3]]<0.15)continue;
@@ -295,6 +295,9 @@ function anAcc(c,A0,n){const A=new Float32Array(A0.length);for(let k=0;k<A.lengt
   let r;
   if(c.ref){const D=new Float32Array(A.length);for(let k=0;k<A.length;k++)D[k]=Math.max(0,A[k]-c.ref[k]);r=analyzePoly(D,A,c.ref)} // solo le note NUOVE (arpeggi)
   else r=analyzePoly(A);
+  if(c.ref&&S.mode!=='single'&&S.mode!=='bi'&&!r.c){const nn=r.m==null?0:NOTES(r).length; // pennata: accordo intero, privilegiando le note appena suonate
+    if(nn>=2||(nn===0&&(c.str||0)>=1.8)){const N=new Set(NOTES(r).map(m=>m%12)),oA=multiPitch(A.slice());
+      if(oA.length){const ch=matchChord(N.size?oA.map(o=>({m:o.m,s:o.s*(N.has(o.m%12)?2:0.4)})):oA);if(ch&&(!N.size||N.has(ch.r))){const fr=voicing(ch.r,ch.ty);return{m:vNotes(fr),c:[ch.r,ch.ty],f:fStr(fr)}}}}}
   const vote=v=>{if(!v||!c.ny)return null;let bm=null,bc=0;for(const k in v)if(v[k]>bc){bc=v[k];bm=+k}return bc>=0.6*c.ny&&bc>=2?bm:null};
   const ms=vote(c.ys);if(ms!=null)return{m:ms}; // suono chiaramente monofonico
   if(r.c)return r; // accordo
@@ -307,35 +310,36 @@ function finalize(c){const n=c.nM||c.nE,A=c.nM?c.accM:c.accE;c.pend=false;
     const r=anAcc(c,A,n);
     c.m=r.m;c.c=r.c;c.f=r.f;
     const l=rec.ev[rec.ev.length-1];
-    if(c.m!=null&&l&&l.m!=null&&l.e===c.s&&c.s-l.s<450&&S.mode!=='single'&&S.mode!=='bi'&&!(l.c&&r.c)){ // pennata appena iniziata: le note si stanno ancora riempiendo
+    if(c.m!=null&&l&&l.m!=null&&l.e===c.s&&c.s-l.s<300&&S.mode!=='single'&&S.mode!=='bi'&&!(l.c&&r.c)){ // pennata appena iniziata: le note si stanno ancora riempiendo
       const u=[...new Set([...NOTES(l),...NOTES(c)])],ch=r.c?{r:r.c[0],ty:r.c[1]}:(new Set(u.map(m=>m%12)).size>=3?matchChord(u.map(m=>({m,s:1}))):null);
       if(ch){const fr=voicing(ch.r,ch.ty);l.m=vNotes(fr);l.c=[ch.r,ch.ty];l.f=fStr(fr);revive(c);showLive({m:l.m,c:l.c});return}}
-    if(c.m!=null&&l&&l.c&&l.e===c.s&&(r.c?(r.c[0]===l.c[0]&&r.c[1]===l.c[1]):(c.s-l.s<600&&NOTES(c).every(m=>NOTES(l).includes(m))))){revive(c);return} // stesso accordo che continua
+    if(c.m!=null&&l&&l.c&&l.e===c.s&&(c.str||9)<2&&(r.c?(r.c[0]===l.c[0]&&r.c[1]===l.c[1]):(c.s-l.s<600&&NOTES(c).every(m=>NOTES(l).includes(m))))){revive(c);return} // stesso accordo che continua
     if(c.m==null)revive(c);else showLive(r)}
   c.accE=c.accM=c.ref=null}
 function closeEv(e){if(rec.cur.pend)finalize(rec.cur);const c=rec.cur;if(e>c.s)rec.ev.push({m:c.m,s:c.s,e,c:c.c,f:c.f})}
 function segPoly(r,hp){
   const t=clock();let c=rec.cur,snd=c.m!==null;
-  grabSpec();rec.ring=rec.ring||[];rec.ring.push(lin.slice());if(rec.ring.length>3)rec.ring.shift();
+  grabSpec();rec.ring=rec.ring||[];let fx=0;{const pv=rec.ring[rec.ring.length-1];if(pv){const df=ac.sampleRate/an.fftSize,k0=Math.floor(70/df),k1=Math.floor(2500/df);let a=0,b=0;for(let k=k0;k<k1;k++){a+=Math.max(0,lin[k]-pv[k]);b+=pv[k]}fx=a/(b+1e-9)}}rec.ring.push(lin.slice());if(rec.ring.length>3)rec.ring.shift(); // fx = quanto suono nuovo è arrivato
   if(c.pend){const dt=t-c.s;if(dt>=60){const yf=yin(mtof(AMIN)*0.85,mtof(AMAX)*1.25);if(dt>=130){c.ny=(c.ny||0)+1;}if(dt>=130&&yf>0&&YCL<0.08){const n=Math.round(69+12*Math.log2(yf/S.a4));if(ALLOWED.has(n)){c.yv=c.yv||{};c.yv[n]=(c.yv[n]||0)+1;if(YCL<0.03){c.ys=c.ys||{};c.ys[n]=(c.ys[n]||0)+1}}}const M=dt>=130?c.accM:c.accE;for(let k=0;k<M.length;k++)M[k]+=lin[k];if(dt>=130)c.nM++;else c.nE++}if((c.nE===1&&!c.prov)||(c.nM===1&&!c.prov2)){if(c.nM)c.prov2=1;c.prov=c.nM?anAcc(c,c.accM,c.nM):anAcc(c,c.accE,c.nE);if(c.prov.m!=null){showLive(c.prov);kick()}}if(dt>=330){let w=false;if(dt<480&&S.mode!=='single'&&S.mode!=='bi'&&c.nM){const r=anAcc(c,c.accM,c.nM);w=Array.isArray(r.m)&&!r.c}if(!w){finalize(c);c=rec.cur;snd=c.m!==null}}}
   if(r<(snd?G*0.3:G)){rec.sil++;if(rec.sil>=4&&snd){const s=Math.max(c.s,t-75);closeEv(s);rec.cur={m:null,s}}return}
   rec.sil=0;
-  if((c.m===null&&!c.dead)||(!(c.pend&&t-c.s<350&&c.prov&&Array.isArray(c.prov.m))&&t-c.s>110&&((r>rec.valley*2.2&&r>G*2)||(hp>rec.hv*1.9&&r>G)))){const s=Math.max(c.s,t-10);closeEv(s);rec.cur=newPend(s);rec.valley=r;rec.hv=hp;return}
+  if((c.m===null&&!c.dead)||(!(c.pend&&t-c.s<350&&c.prov&&Array.isArray(c.prov.m))&&t-c.s>110&&((r>rec.valley*2.2&&r>G*2)||(hp>rec.hv*2.4&&r>G*1.5)||(fx>0.42&&t-c.s>200&&r>G*1.5)))){const s=Math.max(c.s,t-10),str=Math.max(r/Math.max(rec.valley,1e-6),fx>0.42?2:0);closeEv(s);rec.cur=newPend(s);rec.cur.str=str;rec.valley=r;rec.hv=hp;return}
   if(t-c.s<80){rec.valley=r;rec.hv=hp}else{rec.valley=Math.min(rec.valley,r);rec.hv=Math.min(rec.hv,hp)}
 }
 /* ---------- RECORDING ---------- */
 let rec={at:null,on:false,paused:false,counting:false,acc:0,t0:0,cs:0,ev:[],cur:null,pend:null,valley:1,lastClick:0,beat:-1};
 let _=0;const clock=()=>rec.acc+((!rec.on||rec.paused||rec.counting)?0:performance.now()-rec.t0);
 function seg(obs,r){
+  {const t0=clock();if(r>(rec.lr||0)*1.5&&r>G*1.5)rec.onT=t0;rec.lr=r}
   if(obs==='U')return;const t=clock(),c=rec.cur,om=obs==='R'?null:obs;
   if(om!==null&&om===c.m){
     if(t-c.s<80)rec.valley=r;
     else{if(t-c.s>180&&r>rec.valley*3.2&&r>G*4){rec.ev.push({m:c.m,s:c.s,e:t-10});rec.cur={m:om,s:t-10};rec.valley=r;rec.pend=null;return}
       rec.valley=Math.min(rec.valley,r)}
     rec.pend=null;return}
-  if(om===c.m){rec.pend=null;return}
+  if(om===c.m||(om!==null&&c.m!==null&&(Math.abs(om-c.m)%12===0)&&t-(rec.onT??-1e9)>150)){rec.pend=null;return}
   if(rec.pend&&rec.pend.m===om)rec.pend.n++;else rec.pend={m:om,n:1,s:Math.max(0,t-12)};
-  if(rec.pend.n>=(om===null?4:(YCL<0.05?2:3))){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};kick();rec.valley=r;rec.pend=null}
+  if(rec.pend.n>=(om===null?4:(c.m!==null&&t-(rec.onT??-1e9)>150?6:(YCL<0.05?2:3)))){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};kick();rec.valley=r;rec.pend=null}
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/4,g=S.grid,L=sc.beats*4;if(!ev.length)return[];
