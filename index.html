@@ -182,7 +182,7 @@ const fStr=fr=>fr.map(f=>f<0?'x':f).join(fr.some(f=>f>9)?'-':'');
 const chName=c=>(S.lang==='it'?ICH:ECH)[c[0]]+TYPES[c[1]][1];
 const THEMES={azzurro:['#1e9bf0','#38c6f4'],arcobaleno:['#ff4f8b','#6c5cff'],mare:['#0a84ff','#14b8a6'],tramonto:['#ff7a00','#ff2d55'],menta:['#00b383','#5856d6'],limone:['#f2a900','#ff5e5e'],caramella:['#af52de','#ff6fb5'],notte:['#1d1d3a','#bf5af2']};
 
-let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',chs:5,nf:4,mgain:1,mlo:60,mhi:6000,pz:1,xpr:4,xlab:1,xtab:true,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
+let S=Object.assign({lang:'it',fMin:0,fMax:5,grid:1,sens:5,a4:440,click:true,vol:60,mode:'all',trip:true,autoT:true,chs:5,nf:4,mgain:1,mlo:60,mhi:6000,pz:1,xpr:4,xlab:1,xtab:true,phone:true,snd:'gtr',pspd:1,countIn:true,tab:true,theme:'azzurro'},LS.get('sdv_set',{}));
 if(!S.v2){S.grid=2;S.v2=1}
 if(S.poly===false&&!S.v3)S.mode='single';S.v3=1;if(!S.v4){S.countIn=true;S.v4=1}if(!S.v5){S.theme='azzurro';S.v5=1}
 const POLY=()=>S.mode!=='single';
@@ -353,15 +353,16 @@ function toMeasures(ev){
   {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,Math.min(0.9,0.25+S.nf*0.05)*g*u)&&i>0; // troppo brevi = rumore
     if(sh){o.cut=1;return}const l=o[o.length-1];if(o.cut&&l&&e.m!==null&&JSON.stringify(l.m)===JSON.stringify(e.m)){o[o.length-1]=Object.assign({},l,{e:e.e});o.cut=0;return}o.cut=0;o.push(e)});ev=o}
   // piccoli stacchi tra due note (< metà battito) = nota tenuta, non pausa
-  {const b0=4*60000/sc.bpm/BU();ev=ev.filter((e,i)=>!(e.m===null&&i>0&&i<ev.length-1&&ev[i-1].m!==null&&ev[i+1].m!==null&&e.e-e.s<0.8*(ev[i-1].e-ev[i-1].s)&&e.e-e.s<0.9*b0))}
+  {const b0=4*60000/sc.bpm/BU();ev=ev.filter((e,i)=>!(e.m===null&&i>0&&i<ev.length-1&&ev[i-1].m!==null&&ev[i+1].m!==null&&e.e-e.s<0.6*(ev[i-1].e-ev[i-1].s)&&e.e-e.s<0.7*b0))}
   // allineamento al tempo: ritardo medio sugli attacchi + aggancio preferendo battiti, poi crome, poi semicrome
   const bt=4*u,devs=ev.filter(e=>e.m!==null).map(e=>{const b=e.s/bt;return b-Math.round(b)}).filter(d=>Math.abs(d)<0.3).sort((a,b)=>a-b);
-  const off=devs.length>=2?devs[devs.length>>1]:0,LV=[[1,0],[0.5,0.12],[0.25,0.28],[0.125,0.36],[0.0625,0.42]].filter(l=>l[0]>=g/4);
-  const snap=x=>{const b=Math.max(0,x/bt-off);let bc=0,bs=1e9;for(const[l,pn]of LV){const c=Math.round(b/l)*l,sc2=Math.abs(b-c)+pn;if(sc2<bs){bs=sc2;bc=c}}return bc*4};
+  const off=devs.length>=2?devs[devs.length>>1]:0,LV=[[1,0],[0.5,0.08],[0.25,0.18],[0.125,0.26],[0.0625,0.32]].filter(l=>l[0]>=g/4).concat(S.trip?[[1/3,0.16]]:[]);
+  const snap=x=>{const b=Math.max(0,x/bt-off);let bc=0,bs=1e9;for(const[l,pn]of LV){const c=Math.round(b/l)*l,hm=mL()/8,sc2=Math.abs(b-c)+pn-(hm>0&&Math.abs(c/hm-Math.round(c/hm))<1e-6?0.03:0); // peso metrico: battere e metà battuta un po' favoriti
+        if(sc2<bs){bs=sc2;bc=c}}return bc*4};
   const Q=ev.map(e=>snap(e.s));for(let i=0;i<Q.length-1;i++)if(ev[i].c&&ev[i+1].m===null){const b=Math.max(Q[i]+4,Math.round(Q[i+1]/4)*4);if(i+2>=Q.length||b<Q[i+2])Q[i+1]=b} // accordo: durata a quarti
   for(let i=1;i<Q.length;i++)if(Q[i]<=Q[i-1]&&ev[i-1].m!==null&&ev[i-1].e-ev[i-1].s>=g*u*0.6&&(ev[i].m===null||ev[i].e-ev[i].s>=g*u*0.6)){const f=Math.max(g,Math.round((ev[i].s-ev[i-1].s)/u/g)*g);Q[i]=Q[i-1]+(i+1<Q.length&&Q[i-1]+f>=Q[i+1]?g:f)} // nessuna nota sparisce
   for(let i=0;i<Q.length-1;i++)if(ev[i].m!==null&&ev[i+1].m===null){const dq=Q[i+1]-Q[i],lim=i+2<Q.length?Q[i+2]:Infinity; // durata "pulita": semiminima, minima, semibreve, croma
-    let bv=0,bd=1e9;for(const v of [2,3,4,6,8,12,16]){if(v<g)continue;const d=Math.abs(dq-v)*(v===3||v===6||v===12?1.25:1);if(d<bd){bd=d;bv=v}}if(bv&&Math.abs(dq-bv)<=Math.max(0.3*bv,1)+1e-9&&Q[i]+bv<=lim+1e-9)Q[i+1]=Q[i]+bv} // due note diverse non sullo stesso punto
+    let bv=0,bd=1e9;for(const v of (S.trip?[2,3,4,6,8,12,16,4/3,8/3]:[2,3,4,6,8,12,16])){if(v<g)continue;const d=Math.abs(dq-v)*(v===3||v===6||v===12?1.05:1);if(d<bd){bd=d;bv=v}}if(bv&&Math.abs(dq-bv)<=Math.max(0.25*bv,1)+1e-9&&Q[i]+bv<=lim+1e-9)Q[i+1]=Q[i]+bv} // due note diverse non sullo stesso punto
   let seq=[];
   ev.forEach((e,i)=>{const p=Q[i];let n=i<ev.length-1?Q[i+1]:Math.max(p,snap(e.e));if(e.live&&e.m!==null&&n<=p)n=p+g;if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
@@ -386,13 +387,22 @@ function pauseRec(){
   else{rec.t0=performance.now();rec.paused=false;rec.beat=-1;status('● Registrazione…')}
   drawCtrl();
 }
-function stopRec(){if(!rec.on)return;
+function stopRec(){if(!rec.on)return;const wasImp=!!rec.imp;
   if(rec.imp){const x=rec.imp;rec.imp=null;try{x.src.onended=null;x.src.stop()}catch(e){}clearInterval(x.iv);S.countIn=x.ci;S.click=x.ck;if(micOut)micOut.connect(an)}
   if(!rec.counting){if(!rec.paused)rec.acc+=performance.now()-rec.t0;rec.paused=true;if(rec.cur.pend)finalize(rec.cur);rec.ev.push({m:rec.cur.m,s:rec.cur.s,e:rec.acc,c:rec.cur.c,f:rec.cur.f})}
+  if(wasImp&&S.autoT&&!rec.counting)estTempo(rec.ev);
   const ms=rec.counting?[]:toMeasures(rec.ev);rec.on=false;rec.counting=false;
   if(ms.length){sc.measures=merged(ms);save();toast(rec.at==null?'Aggiunte '+ms.length+' battute':'Battute sovrascritte dalla '+(rec.at+1))}else toast('Nessuna nota rilevata');
   status('Premi Registra e suona');drawCtrl();render();
 }
+function estTempo(ev){ // stima BPM e inizio battuta dagli attacchi delle note
+  const on=ev.filter(e=>e.m!==null&&e.e-e.s>60).map(e=>e.s);if(on.length<4)return;
+  let best=null;for(let bpm=50;bpm<=200;bpm+=0.5){const P=60000/bpm,h=P/2,sg=Math.max(18,h*0.12);
+    for(let ph=0;ph<h;ph+=15){let sc2=0;for(const t of on){const d=((t-ph)%h+h)%h,dd=Math.min(d,h-d);sc2+=Math.exp(-dd*dd/(2*sg*sg))*((((t-ph)%P+P)%P)<h/2||(((t-ph)%P+P)%P)>P-h/2?1.15:1)}
+      sc2*=Math.exp(-Math.pow(Math.log2(bpm/100),2)/0.5);if(!best||sc2>best.s)best={s:sc2,bpm,ph}}}
+  const P=60000/best.bpm;let ph=best.ph;while(ph-P/2>=0)ph-=P/2;const f=on[0];let st=ph+Math.floor((f-ph)/P)*P;if(f-st>P*0.75)st+=P;if(st>f+P/4)st-=P;
+  sc.bpm=Math.round(best.bpm);ev.forEach(e=>{e.s=Math.max(0,e.s-st);e.e=Math.max(0,e.e-st)});for(let i=ev.length-1;i>=0;i--)if(ev[i].e<=0)ev.splice(i,1);if(ev.length&&ev[0].s>0)ev.unshift({m:null,s:0,e:ev[0].s});
+  toast('Tempo stimato: ♩ = '+sc.bpm)}
 function metro(now){
   const bm=60000/sc.bpm;
   if(rec.on&&rec.counting){if(now<rec.cs)return;const k=Math.floor((now-rec.cs)/bm);
@@ -502,7 +512,8 @@ function pbTrack(){const pi=$('#pbInfo');pi.classList.toggle('on',PB.on);if(!PB.
 const queue=[];
 /* ---------- RENDER ---------- */
 let sel=null;
-const decomp=(d,rest)=>{const r=[];while(d>0){const v=(rest?[16,8,4,2,1,0.5,0.25]:DUR).find(x=>x<=d);r.push(v);d-=v}return r};
+const T3=[8/3,4/3,2/3],isT=v=>T3.some(t=>Math.abs(t-v)<1e-6),visV=v=>Math.abs(v-8/3)<1e-6?4:Math.abs(v-4/3)<1e-6?2:Math.abs(v-2/3)<1e-6?1:v;
+const decomp=(d,rest)=>{const r=[];let n=0;while(d>1e-6&&n++<40){const L=rest?[16,8,4,8/3,2,4/3,1,2/3,0.5,0.25]:[16,12,8,6,4,3,8/3,2,1.5,4/3,1,2/3,0.5,0.25];let v=L.find(x=>x<=d+1e-6&&(Math.abs(d-x)<1e-6||L.some(y=>y<=d-x+1e-6)));if(!v){r.push(d);break}r.push(v);d-=v}return r};
 const pw=v=>22+Math.sqrt(v)*8;
 const TOP=56,BOT=96,yS=s=>BOT-s*5,H=178;
 const ln=(x1,y1,x2,y2,w)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="${w||1}"/>`;
@@ -563,7 +574,7 @@ function render(opt){opt=opt||{};
   const lays=meas.map((ms,mi)=>{
     const it=[];
     if(!ms.length)it.push({rest:true,v:16,empty:true,w:60});
-    else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null),ns=NOTES(e).slice().sort((a,b)=>a-b),cont=prevT;prevT=!!e.t&&ns.length>0;ps.forEach((v,pi)=>it.push({ns,live:e.live,rest:!ns.length,v,ei,first:pi===0&&!cont,c:e.c,f:e.f,tie:ns.length>0&&(pi<ps.length-1||!!e.t),w:pw(v)}))});
+    else ms.forEach((e,ei)=>{const ps=decomp(e.d,e.m===null),ns=NOTES(e).slice().sort((a,b)=>a-b),cont=prevT;prevT=!!e.t&&ns.length>0;ps.forEach((v,pi)=>it.push({ns,live:e.live,rest:!ns.length,v:visV(v),dv:v,tr:isT(v),ei,first:pi===0&&!cont,c:e.c,f:e.f,tie:ns.length>0&&(pi<ps.length-1||!!e.t),w:pw(visV(v))}))});
     const acc={},KA=keyAcc();
     it.forEach(p=>{p.lines=1;if(p.rest)return;p.st=[];p.acc=[];let na=0;
       p.ns.forEach(m=>{const q=spell(m+12),dk=q.l+7*q.o;p.st.push(dk-30);let a='';const cur=dk in acc?acc[dk]:KA[q.l];
@@ -589,7 +600,7 @@ function render(opt){opt=opt||{};
       s+=`<rect class="mh" data-mi="${mi}" x="${x+1}" y="6" width="${mw-2}" height="${RH-8}" rx="12" fill="${isM?'var(--accent)':(ly.over&&!opt.host?'#ff3b30':'transparent')}" fill-opacity="${isM||(ly.over&&!opt.host)?.12:0}"/>`;
       s+=`<text x="${x+4}" y="18" font-size="10" fill="var(--mut)" pointer-events="none">${mi+1}${BR.has(mi)?' ↵':''}</text>`;
       let cx=x+8*km,ps=0;
-      ly.it.forEach(p=>{const pk=p.w*km;p.nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;p.ps=ps;ps+=p.v;delete p.bm});
+      ly.it.forEach(p=>{const pk=p.w*km;p.nx=cx+pk/2+(p.na?4+(p.na>1?4:0):0);cx+=pk;p.ps=ps;ps+=(p.dv??p.v);delete p.bm});
       // crome/semicrome unite da travi (gruppi dentro lo stesso battito)
       const grp=[];let cur=[];const flush=()=>{if(cur.length>1)grp.push(cur);cur=[]};
       ly.it.forEach(p=>{if(p.rest||p.v>3||p.v===4||p.empty){flush();return}const GL=DEN()===8?(sc.beats%3===0?6:4):4,bt=Math.floor(p.ps/GL+1e-9);if(cur.length&&Math.floor(cur[0].ps/GL+1e-9)!==bt)flush();cur.push(p)});flush();
@@ -603,6 +614,9 @@ function render(opt){opt=opt||{};
         beams+=poly(x1,x2,0);
         [[1.5,1],[0.5,2],[0.25,3]].forEach(([lim,lv])=>{const o=lv*7*dir;G.forEach((p,i)=>{if(p.v>lim)return;const n=G[i+1],pr=G[i-1];
           if(n&&n.v<=lim)beams+=poly(sx(p),sx(n),o);else if(!(pr&&pr.v<=lim))beams+=n?poly(sx(p),sx(p)+9,o):poly(sx(p)-9,sx(p),o)})})});
+      {let run=[];const fl=()=>{if(run.length){const xs=run.map(p=>p.nx),ys=run.flatMap(p=>p.st?p.st.map(yS):[TOP+10]);const x0=Math.min(...xs),x1=Math.max(...xs),yy=Math.min(TOP-6,Math.min(...ys)-30);
+          beams+=`<text x="${(x0+x1)/2}" y="${yy}" text-anchor="middle" font-size="13" font-style="italic" font-weight="700" fill="currentColor">3</text>`;if(run.length>1)beams+=`<path d="M${x0-4} ${yy+4}v-5h${(x1-x0)/2-8}M${(x0+x1)/2+8} ${yy-1}h${(x1-x0)/2-4}v5" fill="none" stroke="currentColor" stroke-width="1"/>`}run=[]};
+        ly.it.forEach(p=>{if(!p.tr){fl();return}const span=(p.dv>2?8:4);if(run.length&&Math.floor(run[0].ps/span+1e-6)!==Math.floor(p.ps/span+1e-6))fl();run.push(p);let tot=run.reduce((a,q)=>a+q.dv,0);if(Math.abs(tot-span)<1e-6)fl()});fl()}
       s+=beams;
       ly.it.forEach(p=>{const nx=p.nx;
         const isS=(isM&&sel&&sel.ei===p.ei&&p.ei!==undefined)||(!opt.host&&PB.hl===mi+':'+p.ei),col=isS||p.live?'var(--accent)':'currentColor';
@@ -632,7 +646,7 @@ function render(opt){opt=opt||{};
 }
 /* ---------- EDITOR ---------- */
 let ed={v:4,dot:false,sharp:false,oct:3,stk:false,cr:0,ct:'maj'};
-const edD=()=>ed.dot&&ed.v>0.25?ed.v*1.5:ed.v;
+const edD=()=>ed.tr&&ed.v>=1&&ed.v<=4?ed.v*2/3:(ed.dot&&ed.v>0.25?ed.v*1.5:ed.v);
 function select(mi,ei){
   sel={mi,ei};const e=ei!=null?sc.measures[mi][ei]:null;
   if(e){const d=e.d;if([12,6,3,1.5].includes(d)){ed.v=d/1.5;ed.dot=true}else if(DUR.includes(d)){ed.v=d;ed.dot=false}
@@ -648,7 +662,7 @@ function drawEd(){
   const fb=v=>(v/BU()).toLocaleString('it-IT',{maximumFractionDigits:2});
   $('#einfo').innerHTML='Battuta '+(sel.mi+1)+' · <span style="color:'+(sum>L?'#ff3b30':sum===L?'#34c759':'var(--mut)')+'">'+fb(sum)+' di '+sc.beats+' tempi</span>';
   $('#bBr').classList.toggle('on',(sc.br||[]).includes(sel.mi));
-  $('#eDur').innerHTML=[16,8,4,2,1,0.5,0.25].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}" title="${DNAME[v]}">${nIco(v)}</button>`).join('')+`<button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
+  $('#eDur').innerHTML=[16,8,4,2,1,0.5,0.25].map(v=>`<button class="ch ${ed.v===v?'on':''}" data-d="${v}" title="${DNAME[v]}">${nIco(v)}</button>`).join('')+`<button class="ch ${ed.tr?'on':''}" data-a="tr">3 Terzina</button><button class="ch ${ed.dot?'on':''}" data-a="dot">• Punto</button>`;
   const L7=S.lang==='it'?LETI:LETE;
   $('#eNotes').innerHTML=`<button class="ch ${ed.stk?'on':''}" data-a="stk">＋ Sovrapponi</button>`+L7.map((n,i)=>`<button class="ch nt" data-n="${i}">${n}${ed.sharp?'#':''}</button>`).join('')+
     `<button class="ch ${ed.sharp?'on':''}" data-a="sh">#</button><button class="ch" data-a="o-">Ott −</button><span class="ch" style="background:transparent">${ed.oct}</span><button class="ch" data-a="o+">Ott +</button><button class="ch" data-a="rest">Pausa</button><button class="ch" data-a="del">⌫</button>`;
@@ -678,6 +692,7 @@ $('#editor').onclick=ev=>{
   const ms=sc.measures[sel.mi],e=sel.ei!=null?ms[sel.ei]:null,a=b.dataset.a;
   if(b.dataset.d){ed.v=+b.dataset.d;if(ed.v===0.25)ed.dot=false;if(e)setDur(ms,sel.ei,edD())}
   else if(b.dataset.n){const m=(ed.oct+1)*12+SEM[+b.dataset.n]+(ed.sharp?1:0);if(e){if(ed.stk&&e.m!==null){const a=NOTES(e).slice(),j=a.indexOf(m);if(j>=0)a.splice(j,1);else a.push(m);a.sort((x,y)=>x-y);e.m=a.length?(a.length===1?a[0]:a):null}else e.m=m;delete e.c;delete e.f}else{if(addEv(ms,{m,d:edD()})&&ed.stk)sel.ei=ms.length-1}ensureAC();pluck(m,ac.currentTime+.01,.4,.3)}
+  else if(a==='tr'){ed.tr=!ed.tr;if(ed.tr)ed.dot=false;if(e)setDur(ms,sel.ei,edD())}
   else if(a==='dot'){ed.dot=!ed.dot&&ed.v>0.25;if(e)setDur(ms,sel.ei,edD())}
   else if(a==='sh')ed.sharp=!ed.sharp;
   else if(a==='o-')ed.oct=Math.max(1,ed.oct-1);
@@ -819,6 +834,8 @@ function drawSet(){
   <div class="row"><div>Filtro rumori<small>Più alto = ignora più rumori e note sfiorate · ${S.nf}</small></div><input type="range" id="nf" min="1" max="20" value="${S.nf}"></div>
   <div class="row"><div>Sensibilità accordi<small>Più basso = meno accordi, più note singole e bicordi · ${S.chs}</small></div><input type="range" id="chs" min="1" max="10" value="${S.chs}"></div>
   <div class="row"><button class="btn sm" data-reseq="1">Ripristina valori del microfono</button></div>
+  <div class="row"><div>Terzine<small>Riconosce e scrive le terzine</small></div>${tg('trip',S.trip)}</div>
+  <div class="row"><div>Tempo automatico<small>Per l'audio importato: stima da solo i bpm e l'inizio della battuta</small></div>${tg('autoT',S.autoT)}</div>
   <div class="row"><div>LA di riferimento (Hz)</div><input type="number" id="a4" min="415" max="466" value="${S.a4}" style="width:80px"></div>
   <div class="row"><div>Metronomo sonoro</div>${tg('click',S.click)}</div>
   <div class="row"><div>Volume metronomo<small>${S.vol}%</small></div><input type="range" id="vol" min="0" max="100" value="${S.vol}"></div>
