@@ -812,8 +812,9 @@ function nIco(v){const fl={2:1,1:2,0.5:3,0.25:4}[v]||0,hol=v>=8;let s=`<ellipse 
 const GRIDSEG=()=>seg2('grid',[[4,nIco(4)],[2,nIco(2)],[1,nIco(1)],[0.5,nIco(0.5)],[0.25,nIco(0.25)]],S.grid);
 function setKV(k,v){if(rec.on&&k!=='snd'&&k!=='pspd'&&k!=='pz'){toast('Termina prima la registrazione');return false}
   if(k==='beats'){sc.beats=+v;fixAll();save()}else S[k]=(k==='grid'||k==='pspd'||k==='pz')?+v:v;return true}
-function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve)</div>${GRIDSEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','Chitarra'],['pia','Pianoforte'],['syn','Semplice']],S.snd)}<div class="spd">${ico('slow')}<input type="range" id="pspd" min="10" max="300" step="1" value="${sc.pbpm||sc.bpm}">${ico('fast')}<b id="pspdV">${sc.pbpm||sc.bpm} bpm</b></div>`}
-$('#quick').oninput=ev=>{if(ev.target.id!=='pspd')return;sc.pbpm=+ev.target.value;$('#pspdV').textContent=ev.target.value+' bpm';save();
+function drawQuick(){$('#quick').innerHTML=`<div style="width:100%;text-align:center;font-size:12px;color:var(--mut)">Cosa riconoscere</div>${MODESEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Suddivisione (nota più breve)</div>${GRIDSEG()}<div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Metronomo della registrazione</div><div class="spd">${ico('slow')}<input type="range" id="rbpm" min="10" max="300" step="1" value="${sc.bpm}">${ico('fast')}<b id="rbpmV">${sc.bpm} bpm</b></div><div style="width:100%;text-align:center;font-size:12px;color:var(--mut);margin-top:4px">Ascolto: suono e velocità</div>${seg2('snd',[['gtr','Chitarra'],['pia','Pianoforte'],['syn','Semplice']],S.snd)}<div class="spd">${ico('slow')}<input type="range" id="pspd" min="10" max="300" step="1" value="${sc.pbpm||sc.bpm}">${ico('fast')}<b id="pspdV">${sc.pbpm||sc.bpm} bpm</b></div>`}
+$('#quick').oninput=ev=>{if(ev.target.id==='rbpm'){if(rec.on&&!rec.paused){ev.target.value=sc.bpm;return toast('Metti in pausa o termina la registrazione per cambiare il tempo')}const pb=!sc.pbpm||sc.pbpm===sc.bpm;sc.bpm=+ev.target.value;if(pb){sc.pbpm=sc.bpm;const q=$('#pspd');if(q){q.value=sc.bpm;$('#pspdV').textContent=sc.bpm+' bpm'}}$('#rbpmV').textContent=sc.bpm+' bpm';save();$('#meta').textContent=$('#meta').textContent.replace(/♩ = \d+/,'♩ = '+sc.bpm);return}
+  if(ev.target.id!=='pspd')return;sc.pbpm=+ev.target.value;$('#pspdV').textContent=ev.target.value+' bpm';save();
   clearTimeout(window._sp);window._sp=setTimeout(()=>{if(PB.on&&!PB.paused){pausePlay();playFrom(PB.pos)}},250)};
 $('#quick').onclick=ev=>{const b=ev.target.closest('button');if(!b||!b.dataset.k)return;const k=b.dataset.k;if(setKV(k,b.dataset.v)){if(k==='snd'||k==='pspd'){save();drawQuick();if(k==='snd'){ensureAC();pluck(48,ac.currentTime+.02,1,.3);pluck(52,ac.currentTime+.04,1,.3);pluck(55,ac.currentTime+.06,1,.3)}}else apply()}};
 function drawSet(){
@@ -823,7 +824,7 @@ function drawSet(){
   <div class="row"><div>Cosa riconoscere</div>${MODESEG()}</div>
   <div class="row"><div>Porzione di manico<small>Note riconosciute: ${nm(AMIN,1)} → ${nm(AMAX,1)} (${ALLOWED.size} note)</small></div>
    <div>dal <select id="fMin">${fo(0,14,S.fMin)}</select> al <select id="fMax">${fo(S.fMin,15,S.fMax)}</select></div></div>
-  <div class="row"><div>Velocità (BPM)<small>♩ = ${sc.bpm}</small></div><input type="range" id="bpm" min="40" max="200" value="${sc.bpm}"></div>
+  <div class="row"><div>Velocità (BPM)<small>♩ = ${sc.bpm}</small></div><input type="range" id="bpm" min="10" max="300" value="${sc.bpm}"></div>
   <div class="row"><div>Armatura di chiave</div>${keySel()}</div>
   <div class="row"><div>Nota più breve<small>Precisione delle durate</small></div>${GRIDSEG()}</div>
   <div class="row" style="border:0;padding-bottom:0"><b style="font-size:17px">Microfono</b></div>
