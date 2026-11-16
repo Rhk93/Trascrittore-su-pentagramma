@@ -217,7 +217,7 @@ function yin(fmin,fmax){
   d[0]=1;let sum=0;
   for(let t=1;t<=tMax;t++){let s=0;for(let i=0;i<W;i++){const x=buf[off+i]-buf[off+i+t];s+=x*x}sum+=s;d[t]=sum>0?s*t/sum:1}
   let tau=-1;
-  for(let t=tMin;t<tMax;t++){if(d[t]<0.15){while(t+1<tMax&&d[t+1]<d[t])t++;tau=t;break}}
+  for(let t=tMin;t<tMax;t++){if(d[t]<Math.max(0.07,0.15-Math.max(0,S.nf-4)*0.005)){while(t+1<tMax&&d[t+1]<d[t])t++;tau=t;break}}
   if(tau<0){let mn=1,mt=-1;for(let t=tMin;t<tMax;t++)if(d[t]<mn){mn=d[t];mt=t}if(mn<0.22)tau=mt;else return -1}
   {const t2=Math.round(tau/2);if(t2>=tMin){let bt=t2;for(let t=t2-2;t<=t2+2;t++)if(d[t]<d[bt])bt=t;if(d[bt]<0.2)tau=bt}} // evita l'ottava sotto
   YCL=d[tau];const a=d[tau-1],b=d[tau],c=d[tau+1],den=a-2*b+c;return sr/(tau+(den?0.5*(a-c)/den:0));
@@ -225,7 +225,7 @@ function yin(fmin,fmax){
 function analyze(){
   an.getFloatTimeDomainData(buf);
   const now=performance.now();let r=0,hp=0;for(let i=buf.length-1024;i<buf.length;i++){r+=buf[i]*buf[i];const d=buf[i]-buf[i-1];hp+=d*d}r=Math.sqrt(r/1024);hp=Math.sqrt(hp/1024);
-  G=0.04*Math.pow(0.62,S.sens-1);
+  G=0.04*Math.pow(0.62,S.sens-1)*(S.nf>4?1+(S.nf-4)*0.08:1);
   $('#lvl').style.width=Math.min(100,r/G*12)+'%';
   frameN++;
   if(POLY()){if(now-rec.lastClick<70){metro(now);return}
@@ -284,7 +284,7 @@ function matchChord(out){
   return best&&best.sc>=0.72-(S.chs-1)*0.03&&best.outW<0.25?best:null;
 }
 function analyzePoly(M,T,R){
-  let out=multiPitch(M,T,R);if(!out.length||out.expl<0.15+S.nf*0.025)return{m:null}; // rumore (dita che strisciano)
+  let out=multiPitch(M,T,R);if(!out.length||out.expl<Math.min(0.5,0.15+S.nf*0.025))return{m:null}; // rumore (dita che strisciano)
   {const q=out.map(o=>o.m).sort((a,b)=>a-b);let adj=0;for(let i=1;i<q.length;i++)if(q[i]-q[i-1]<=2)adj++;if(adj>=2)return{m:null}}
   const ms=[...new Set(out.map(o=>o.m))].sort((a,b)=>a-b),pcs=new Set(ms.map(m=>m%12));
   if(S.mode!=='bi'&&pcs.size>=3&&(S.mode==='chord'||S.chs>=8||ms.length>=(S.chs<=3?5:4)||pcs.size<ms.length||ms[ms.length-1]-ms[0]>=12)){const c=matchChord(out);if(c){const fr=voicing(c.r,c.ty);return{m:vNotes(fr),c:[c.r,c.ty],f:fStr(fr)}}}
@@ -346,11 +346,11 @@ function seg(obs,r){
     rec.pend=null;return}
   if(om===c.m||(om!==null&&c.m!==null&&(Math.abs(om-c.m)%12===0)&&t-(rec.onT??-1e9)>150)){rec.pend=null;return}
   if(rec.pend&&rec.pend.m===om)rec.pend.n++;else rec.pend={m:om,n:1,s:Math.max(0,t-12)};
-  if(rec.pend.n>=(om===null?4:(c.m!==null&&t-(rec.onT??-1e9)>150?6:(YCL<0.05?2:3)))){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};kick();rec.valley=r;rec.pend=null}
+  if(rec.pend.n>=(om===null?4:(c.m!==null&&t-(rec.onT??-1e9)>150?6+Math.floor(S.nf/4):(YCL<0.05?2:3)+Math.floor(Math.max(0,S.nf-4)/4)))){const s=Math.max(rec.pend.s,c.s);rec.ev.push({m:c.m,s:c.s,e:s});rec.cur={m:om,s};kick();rec.valley=r;rec.pend=null}
 }
 function toMeasures(ev){
   const u=60000/sc.bpm/BU(),g=S.grid,L=mL();if(!ev.length)return[];
-  {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,(0.25+S.nf*0.05)*g*u)&&i>0; // troppo brevi = rumore
+  {const o=[];ev.forEach((e,i)=>{const sh=e.m!==null&&!e.live&&e.e-e.s<Math.max(50,Math.min(0.9,0.25+S.nf*0.05)*g*u)&&i>0; // troppo brevi = rumore
     if(sh){o.cut=1;return}const l=o[o.length-1];if(o.cut&&l&&e.m!==null&&JSON.stringify(l.m)===JSON.stringify(e.m)){o[o.length-1]=Object.assign({},l,{e:e.e});o.cut=0;return}o.cut=0;o.push(e)});ev=o}
   // piccoli stacchi tra due note (< metà battito) = nota tenuta, non pausa
   {const b0=4*60000/sc.bpm/BU();ev=ev.filter((e,i)=>!(e.m===null&&i>0&&i<ev.length-1&&ev[i-1].m!==null&&ev[i+1].m!==null&&e.e-e.s<0.8*(ev[i-1].e-ev[i-1].s)&&e.e-e.s<0.9*b0))}
@@ -361,7 +361,7 @@ function toMeasures(ev){
   const Q=ev.map(e=>snap(e.s));for(let i=0;i<Q.length-1;i++)if(ev[i].c&&ev[i+1].m===null){const b=Math.max(Q[i]+4,Math.round(Q[i+1]/4)*4);if(i+2>=Q.length||b<Q[i+2])Q[i+1]=b} // accordo: durata a quarti
   for(let i=1;i<Q.length;i++)if(Q[i]<=Q[i-1]&&ev[i-1].m!==null&&ev[i-1].e-ev[i-1].s>=g*u*0.6&&(ev[i].m===null||ev[i].e-ev[i].s>=g*u*0.6)){const f=Math.max(g,Math.round((ev[i].s-ev[i-1].s)/u/g)*g);Q[i]=Q[i-1]+(i+1<Q.length&&Q[i-1]+f>=Q[i+1]?g:f)} // nessuna nota sparisce
   for(let i=0;i<Q.length-1;i++)if(ev[i].m!==null&&ev[i+1].m===null){const dq=Q[i+1]-Q[i],lim=i+2<Q.length?Q[i+2]:Infinity; // durata "pulita": semiminima, minima, semibreve, croma
-    for(const v of [4,8,16,2])if(v>=g&&Math.abs(dq-v)<=Math.max(0.25*v,1)+1e-9&&Q[i]+v<=lim+1e-9){Q[i+1]=Q[i]+v;break}} // due note diverse non sullo stesso punto
+    let bv=0,bd=1e9;for(const v of [2,3,4,6,8,12,16]){if(v<g)continue;const d=Math.abs(dq-v)*(v===3||v===6||v===12?1.25:1);if(d<bd){bd=d;bv=v}}if(bv&&Math.abs(dq-bv)<=Math.max(0.3*bv,1)+1e-9&&Q[i]+bv<=lim+1e-9)Q[i+1]=Q[i]+bv} // due note diverse non sullo stesso punto
   let seq=[];
   ev.forEach((e,i)=>{const p=Q[i];let n=i<ev.length-1?Q[i+1]:Math.max(p,snap(e.e));if(e.live&&e.m!==null&&n<=p)n=p+g;if(n>p){const l=seq[seq.length-1];if(e.m===null&&l&&l.m===null)l.d+=n-p;else seq.push({m:e.m,d:n-p,c:e.c,f:e.f,live:e.live})}});
   while(seq.length&&seq[seq.length-1].m===null)seq.pop();
@@ -816,7 +816,7 @@ function drawSet(){
   <div class="row"><div>Guadagno<small>Volume d'ingresso del microfono · ${Math.round(S.mgain*100)}%</small></div><input type="range" id="mgain" min="25" max="400" step="5" value="${Math.round(S.mgain*100)}"></div>
   <div class="row"><div>Taglio dei bassi<small>Elimina rimbombi e ronzii sotto · ${S.mlo} Hz</small></div><input type="range" id="mlo" min="20" max="300" step="5" value="${S.mlo}"></div>
   <div class="row"><div>Taglio degli acuti<small>Elimina fruscii sopra · ${S.mhi} Hz</small></div><input type="range" id="mhi" min="1500" max="12000" step="100" value="${S.mhi}"></div>
-  <div class="row"><div>Filtro rumori<small>Più alto = ignora più rumori e note sfiorate · ${S.nf}</small></div><input type="range" id="nf" min="1" max="10" value="${S.nf}"></div>
+  <div class="row"><div>Filtro rumori<small>Più alto = ignora più rumori e note sfiorate · ${S.nf}</small></div><input type="range" id="nf" min="1" max="20" value="${S.nf}"></div>
   <div class="row"><div>Sensibilità accordi<small>Più basso = meno accordi, più note singole e bicordi · ${S.chs}</small></div><input type="range" id="chs" min="1" max="10" value="${S.chs}"></div>
   <div class="row"><button class="btn sm" data-reseq="1">Ripristina valori del microfono</button></div>
   <div class="row"><div>LA di riferimento (Hz)</div><input type="number" id="a4" min="415" max="466" value="${S.a4}" style="width:80px"></div>
